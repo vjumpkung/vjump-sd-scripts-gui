@@ -1,4 +1,5 @@
 import os
+import sys
 
 import pytest
 
@@ -72,7 +73,21 @@ def test_absolute_paths_inside_the_workspace_are_accepted(client, tree):
 
 
 @pytest.mark.parametrize(
-    "path", ["..", "../", "models/../..", "../outside", "/", "C:\\"]
+    "path",
+    [
+        "..",
+        "../",
+        "models/../..",
+        "../outside",
+        "/",
+        # On POSIX "C:\\" is an ordinary relative name (404); only Windows has drives.
+        pytest.param(
+            "C:\\",
+            marks=pytest.mark.skipif(
+                sys.platform != "win32", reason="drive paths are Windows-only"
+            ),
+        ),
+    ],
 )
 def test_paths_escaping_the_workspace_are_rejected(client, tree, path):
     assert client.get("/api/fs/list", params={"path": path}).status_code == 400
