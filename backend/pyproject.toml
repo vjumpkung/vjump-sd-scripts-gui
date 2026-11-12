@@ -1,0 +1,66 @@
+[project]
+name = "sd-scripts-gui-backend"
+version = "0.1.0"
+description = "FastAPI backend for SD-Scripts GUI: schema-driven kohya-ss sd-scripts training, datasets, downloads, and the job queue."
+requires-python = "==3.12.*"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "aiosqlite>=0.20",
+    "tomli-w>=1.0",
+    "python-multipart>=0.0.9",
+    "psutil>=7.2",
+]
+
+[project.optional-dependencies]
+desktop = ["pywebview>=6.2"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app", "app.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"app.sdscripts" = ["args_snapshot.json"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.15",
+    "toml==0.10.2",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated",
+]
+markers = [
+    "sdscripts: needs a real sd-scripts checkout and venv (SD_SCRIPTS_GUI_TEST_SD_PYTHON / SD_SCRIPTS_GUI_TEST_SD_DIR)",
+]
+
+[tool.ruff]
+extend-exclude = ["data", "web"]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+docstring-code-format = true
+indent-style = "space"
+line-ending = "auto"
+quote-style = "double"
+skip-magic-trailing-comma = false

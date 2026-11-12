@@ -1,0 +1,14 @@
+.git
+.claude
+backend/.venv
+backend/data
+backend/web
+frontend/node_modules
+frontend/dist
+sd-scripts
+workspace
+**/__pycache__
+.pytest_cache
+.ruff_cache
+docs/images
+*.bat

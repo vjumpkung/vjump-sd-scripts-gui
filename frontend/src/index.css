@@ -1,0 +1,314 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/*
+ * Fonts are self-hosted through npm so the desktop build works offline.
+ * Latin comes from Jakarta and Geist Mono. Thai comes from Kanit, limited to the Thai range so it
+ * never replaces Latin glyphs. The Kanit 300/400/500/600 files are declared as CSS weights
+ * 400/500/600/700, as on vjump.dev, so Thai sits one step lighter than its nominal weight.
+ */
+@font-face {
+    font-family: 'Plus Jakarta Sans';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 800;
+    src: url('../node_modules/@fontsource-variable/plus-jakarta-sans/files/plus-jakarta-sans-latin-wght-normal.woff2')
+        format('woff2-variations');
+}
+
+@font-face {
+    font-family: 'Geist Mono';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 100 900;
+    src: url('../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2')
+        format('woff2-variations');
+}
+
+@font-face {
+    font-family: 'Kanit';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400;
+    src: url('../node_modules/@fontsource/kanit/files/kanit-thai-300-normal.woff2') format('woff2');
+    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+@font-face {
+    font-family: 'Kanit';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 500;
+    src: url('../node_modules/@fontsource/kanit/files/kanit-thai-400-normal.woff2') format('woff2');
+    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+@font-face {
+    font-family: 'Kanit';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 600;
+    src: url('../node_modules/@fontsource/kanit/files/kanit-thai-500-normal.woff2') format('woff2');
+    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+@font-face {
+    font-family: 'Kanit';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 700;
+    src: url('../node_modules/@fontsource/kanit/files/kanit-thai-600-normal.woff2') format('woff2');
+    unicode-range: U+02D7, U+0303, U+0331, U+0E01-0E5B, U+200C-200D, U+25CC;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-brand-yellow: #fff89c;
+    --color-brand-cyan: #9ffaff;
+    --color-brand-pink: #ff9fed;
+    --font-sans: var(--font-jakarta), var(--font-kanit), ui-sans-serif, system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono), var(--font-kanit), ui-monospace, monospace;
+    --font-heading: var(--font-sans);
+    --color-ink: var(--ink);
+    --color-pink-ink: var(--pink-ink);
+    --color-cyan-ink: var(--cyan-ink);
+    --color-marker-yellow: var(--marker-yellow);
+    --color-marker-cyan: var(--marker-cyan);
+    --color-marker-pink: var(--marker-pink);
+    --color-note: var(--note-bg);
+    --color-code-bg: var(--code-bg);
+    --color-code-fg: var(--code-fg);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    color-scheme: light;
+    --font-jakarta: 'Plus Jakarta Sans';
+    --font-kanit: 'Kanit';
+    --font-geist-mono: 'Geist Mono';
+    --background: #e0e5ec;
+    --foreground: #2a313a;
+    --card: #edf1f5;
+    --card-foreground: #2a313a;
+    --popover: #f4f6f9;
+    --popover-foreground: #2a313a;
+    --primary: #fff89c;
+    --primary-foreground: #2a313a;
+    --secondary: #9ffaff;
+    --secondary-foreground: #2a313a;
+    --muted: #d2d8e0;
+    --muted-foreground: #4b5562;
+    --accent: #ff9fed;
+    --accent-foreground: #2a313a;
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: #b6bfc9;
+    --input: #6f7a87;
+    --ring: #a3237e;
+    --ink: #2a313a;
+    --pink-ink: #a3237e;
+    --cyan-ink: #0a6870;
+    --marker-yellow: #fff89c;
+    --marker-cyan: #9ffaff;
+    --marker-pink: #ff9fed;
+    --note-bg: color-mix(in srgb, #ff9fed 22%, #edf1f5);
+    --code-bg: #2a313a;
+    --code-fg: #e0e5ec;
+    --chart-1: #fff89c;
+    --chart-2: #9ffaff;
+    --chart-3: #ff9fed;
+    --chart-4: #56606c;
+    --chart-5: #2a313a;
+    --radius: 0.625rem;
+    --sidebar: #edf1f5;
+    --sidebar-foreground: #2a313a;
+    --sidebar-primary: #fff89c;
+    --sidebar-primary-foreground: #2a313a;
+    --sidebar-accent: #ff9fed;
+    --sidebar-accent-foreground: #2a313a;
+    --sidebar-border: #aab3be;
+    --sidebar-ring: #ff9fed;
+}
+
+.dark {
+    color-scheme: dark;
+    --background: #2a313a;
+    --foreground: #e0e5ec;
+    --card: #343d48;
+    --card-foreground: #e0e5ec;
+    --popover: #343d48;
+    --popover-foreground: #e0e5ec;
+    --primary: #fff89c;
+    --primary-foreground: #2a313a;
+    --secondary: #9ffaff;
+    --secondary-foreground: #2a313a;
+    --muted: #3b4652;
+    --muted-foreground: #b8c0c9;
+    --accent: #ff9fed;
+    --accent-foreground: #2a313a;
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: #4a5563;
+    --input: #808d9c;
+    --ring: #ff9fed;
+    --pink-ink: #ff9fed;
+    --cyan-ink: #9ffaff;
+    --marker-yellow: #fff89c;
+    --marker-cyan: #9ffaff;
+    --marker-pink: #ff9fed;
+    --note-bg: color-mix(in srgb, #ff9fed 12%, #2a313a);
+    --code-bg: #1f252c;
+    --code-fg: #e0e5ec;
+    --chart-1: #fff89c;
+    --chart-2: #9ffaff;
+    --chart-3: #ff9fed;
+    --chart-4: #b8c0c9;
+    --chart-5: #e0e5ec;
+    --sidebar: #343d48;
+    --sidebar-foreground: #e0e5ec;
+    --sidebar-primary: #fff89c;
+    --sidebar-primary-foreground: #2a313a;
+    --sidebar-accent: #ff9fed;
+    --sidebar-accent-foreground: #2a313a;
+    --sidebar-border: #596674;
+    --sidebar-ring: #9ffaff;
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+    }
+    input,
+    textarea {
+        caret-color: var(--ring);
+    }
+    h1,
+    h2,
+    h3,
+    h4 {
+        text-wrap: balance;
+    }
+    p,
+    li,
+    blockquote {
+        text-wrap: pretty;
+    }
+    time,
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    html {
+        @apply font-sans;
+        scrollbar-color: var(--border) transparent;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    ::selection {
+        @apply bg-accent text-accent-foreground;
+    }
+}
+
+.marker {
+    background-image: linear-gradient(var(--mk), var(--mk));
+    background-repeat: no-repeat;
+    background-size: 100% 0.42em;
+    background-position: 0 88%;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding-inline: 0.06em;
+}
+
+.dark .marker {
+    background-image: none;
+    text-decoration-line: underline;
+    text-decoration-color: var(--mk);
+    text-decoration-thickness: 0.14em;
+    text-underline-offset: 0.16em;
+    text-decoration-skip-ink: auto;
+}
+
+.marker-yellow {
+    --mk: var(--marker-yellow);
+}
+.marker-cyan {
+    --mk: var(--marker-cyan);
+}
+.marker-pink {
+    --mk: var(--marker-pink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .marker-animate {
+        animation: marker-swipe 900ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
+    }
+}
+
+@keyframes marker-swipe {
+    from {
+        background-size: 0% 0.42em;
+    }
+}
+
+.code-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #596674 transparent;
+}
+
+/* Theme switch: the whole page changes at once (DESIGN.md, Motion). */
+.no-transitions,
+.no-transitions *,
+.no-transitions *::before,
+.no-transitions *::after {
+    transition: none !important;
+    animation-duration: 0s !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}

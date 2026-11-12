@@ -1,0 +1,187 @@
+name: release
+
+# Publishes a Docker image and a Windows bundle, but only when the VERSION file
+# changes on main (or when started by hand). Release flow: bump VERSION, push to main.
+
+on:
+  push:
+    branches: [main]
+    paths: ["VERSION"]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
+      exists: ${{ steps.version.outputs.exists }}
+      sd_scripts_sha: ${{ steps.sd.outputs.sha }}
+      image: ${{ steps.image.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read and validate VERSION
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error file=VERSION::Invalid version '$version' (expected MAJOR.MINOR.PATCH with an optional -suffix)"
+            exit 1
+          fi
+          major_minor="$(printf '%s' "$version" | cut -d. -f1,2)"
+          if git rev-parse -q --verify "refs/tags/v${version}" > /dev/null; then
+            exists=true
+            echo "::notice::Tag v${version} already exists, nothing will be published."
+          else
+            exists=false
+          fi
+          {
+            echo "version=${version}"
+            echo "tag=v${version}"
+            echo "major_minor=${major_minor}"
+            echo "exists=${exists}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve the sd-scripts commit
+        id: sd
+        run: |
+          set -euo pipefail
+          sha="$(git ls-remote https://github.com/vjumpkung/sd-scripts.git refs/heads/feat/vjump | cut -f1)"
+          if [ -z "$sha" ]; then
+            echo "::error::Could not resolve refs/heads/feat/vjump of vjumpkung/sd-scripts"
+            exit 1
+          fi
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Lowercase image name
+        id: image
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "name=ghcr.io/${OWNER,,}/vjump-sd-scripts-gui" >> "$GITHUB_OUTPUT"
+
+  docker:
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.prepare.outputs.image }}
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=${{ needs.prepare.outputs.major_minor }}
+            type=raw,value=latest
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SD_SCRIPTS_SHA=${{ needs.prepare.outputs.sd_scripts_sha }}
+            APP_VERSION=${{ needs.prepare.outputs.version }}
+            GIT_REVISION=${{ github.sha }}
+          cache-from: type=registry,ref=${{ needs.prepare.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ needs.prepare.outputs.image }}:buildcache,mode=max
+
+  release:
+    needs: [prepare, docker]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # The pnpm version comes from "packageManager" in frontend/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build the frontend (writes to backend/web)
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Check line endings of the batch files
+        run: |
+          for f in install.bat run.bat run-browser.bat; do
+            if ! grep -q $'\r' "$f"; then
+              echo "::error file=$f::$f does not have CRLF line endings"
+              exit 1
+            fi
+          done
+
+      - name: Assemble the Windows bundle
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          name="sd-scripts-gui-${TAG}"
+          out="dist-release/${name}"
+          mkdir -p "$out"
+          cp VERSION install.bat run.bat run-browser.bat README.md "$out"/
+          if [ -f README.th.md ]; then cp README.th.md "$out"/; fi
+          cp -r docs "$out"/docs
+          mkdir -p "$out/backend"
+          rsync -a \
+            --exclude '/.venv' --exclude '/data' --exclude '/tests' \
+            --exclude '__pycache__' --exclude '*.pyc' \
+            --exclude '.pytest_cache' --exclude '.ruff_cache' --exclude '*.egg-info' \
+            backend/ "$out/backend/"
+          test -f "$out/backend/web/index.html"
+          (cd dist-release && zip -rq "${name}.zip" "${name}")
+          ls -lh "dist-release/${name}.zip"
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" "dist-release/sd-scripts-gui-${TAG}.zip" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes

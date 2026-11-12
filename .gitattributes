@@ -1,0 +1,8 @@
+* text=auto
+*.bat text eol=crlf
+*.sh text eol=lf
+docker/start.sh text eol=lf
+VERSION text eol=lf
+*.png binary
+*.jpg binary
+*.woff2 binary
