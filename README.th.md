@@ -64,7 +64,7 @@ GUI แบบเว็บและเดสก์ท็อปสำหรับ 
 
 GUI ปลอดภัยตั้งแต่ค่าเริ่มต้น ถ้าไม่ตั้ง `SD_SCRIPTS_GUI_PASSWORD` container จะสร้างรหัสผ่านสุ่มทุกครั้งที่เริ่ม และแสดงใน log ของ container เป็น `GUI login: any username / password: ...` (แท็บ **Logs** ของ pod บน Runpod หรือ log ของ instance บน Vast.ai) ล็อกอินด้วยชื่อผู้ใช้อะไรก็ได้ Basic authentication เป็นข้อความธรรมดาบน `http://` จึงควรใช้ URL แบบ HTTPS การล็อกอินเท่ากับควบคุมเครื่องได้เต็มที่ เหมือน Jupyter
 
-บน Runpod เปิด GUI ที่ `https://<POD_ID>-8000.proxy.runpod.net` รายละเอียด: [Cloud: Runpod และ Vast.ai](docs/th/cloud-runpod-vast.md)
+บน Runpod เริ่มได้เร็วที่สุดด้วย template สำเร็จรูป: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga) เปิด GUI ที่ `https://<POD_ID>-8000.proxy.runpod.net` รายละเอียด: [Cloud: Runpod และ Vast.ai](docs/th/cloud-runpod-vast.md)
 
 ## เอกสาร
 

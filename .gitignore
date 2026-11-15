@@ -24,3 +24,5 @@ dist-release/
 .env
 *.env
 .DS_Store
+
+.claude

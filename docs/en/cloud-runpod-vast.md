@@ -28,7 +28,9 @@ Environment variables:
 
 ## Runpod
 
-Create a template (or a pod with the same values):
+The quickest start is the ready-made template: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga). It already uses the values below. Pick a GPU and a volume size, then deploy.
+
+To set it up yourself, create a template (or a pod with the same values):
 
 | Field | Value |
 |---|---|

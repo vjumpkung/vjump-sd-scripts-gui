@@ -28,7 +28,9 @@ Environment variable
 
 ## Runpod
 
-สร้าง template (หรือ pod ที่ใช้ค่าเดียวกัน)
+วิธีที่เร็วที่สุดคือใช้ template สำเร็จรูป: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga) ซึ่งตั้งค่าตามตารางด้านล่างไว้แล้ว เลือก GPU และขนาด volume แล้ว deploy ได้เลย
+
+ถ้าต้องการตั้งค่าเอง ให้สร้าง template (หรือ pod ที่ใช้ค่าเดียวกัน)
 
 | ช่อง | ค่า |
 |---|---|

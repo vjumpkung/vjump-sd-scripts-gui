@@ -64,7 +64,7 @@ Use the image `ghcr.io/vjumpkung/vjump-sd-scripts-gui:latest`.
 
 The GUI is secure by default. If you do not set `SD_SCRIPTS_GUI_PASSWORD`, the container generates a random password at every start and prints it in the container log as `GUI login: any username / password: ...` (the **Logs** tab of a Runpod pod, or the Vast.ai instance log). Log in with any username. Basic authentication is clear text over plain `http://`, so prefer HTTPS URLs. Logging in means full control of the machine, like Jupyter.
 
-On Runpod the GUI is at `https://<POD_ID>-8000.proxy.runpod.net`. More: [Cloud: Runpod and Vast.ai](docs/en/cloud-runpod-vast.md).
+On Runpod, the quickest start is the ready-made template: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga). The GUI is at `https://<POD_ID>-8000.proxy.runpod.net`. More: [Cloud: Runpod and Vast.ai](docs/en/cloud-runpod-vast.md).
 
 ## Documentation
 
