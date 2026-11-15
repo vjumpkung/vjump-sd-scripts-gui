@@ -935,9 +935,25 @@ export const th: Dict = {
     'settings.auth': 'การป้องกันด้วยรหัสผ่าน',
     'settings.auth.on': 'เปิด',
     'settings.auth.off': 'ปิด',
-    'settings.auth.onNote': 'เซิร์ฟเวอร์จะขอรหัสผ่านก่อนแสดงทุกหน้า',
+    'settings.auth.onNote':
+        'แอปจะเปิดที่หน้าเข้าสู่ระบบและขอรหัสผ่าน การเข้าสู่ระบบหนึ่งครั้งอยู่ได้ 7 วัน หรือจนกว่าจะออกจากระบบ',
     'settings.auth.offNote':
         'ใครก็ตามที่เข้าถึงที่อยู่นี้ได้จะใช้แอปได้ ตั้ง SD_SCRIPTS_GUI_PASSWORD บนเซิร์ฟเวอร์เพื่อบังคับใช้รหัสผ่าน',
+    'settings.auth.logout': 'ออกจากระบบ',
+    'settings.auth.logoutError': 'ออกจากระบบไม่สำเร็จ',
+
+    // ---- login ----
+    'login.title': 'เข้าสู่ระบบ',
+    'login.desc': 'เซิร์ฟเวอร์นี้ป้องกันด้วยรหัสผ่าน',
+    'login.password': 'รหัสผ่าน',
+    'login.submit': 'เข้าสู่ระบบ',
+    'login.submitting': 'กำลังเข้าสู่ระบบ...',
+    'login.wrong': 'รหัสผ่านไม่ถูกต้อง ลองอีกครั้ง',
+    'login.throttled': 'ใส่รหัสผ่านผิดหลายครั้งเกินไป ลองใหม่อีกครั้งใน {seconds} วินาที',
+    'login.failed': 'เข้าสู่ระบบไม่สำเร็จ',
+    'login.unreachable': 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้',
+    'login.hint':
+        'รหัสผ่านคือค่า SD_SCRIPTS_GUI_PASSWORD ของเซิร์ฟเวอร์ ใน Docker image รหัสผ่านจะแสดงใน log ของ container เป็น "GUI password: ..."',
 
     // ---- about ----
     'about.title.before': 'เกี่ยวกับ ',

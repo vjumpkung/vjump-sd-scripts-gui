@@ -17,10 +17,11 @@ Environment variable
 
 | ตัวแปร | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
-| `SD_SCRIPTS_GUI_PASSWORD` | ไม่ตั้ง | รหัสผ่านของ GUI (HTTP Basic auth) ถ้าไม่ตั้ง container จะสร้างรหัสผ่านสุ่มทุกครั้งที่เริ่มและแสดงใน log ของ container ตั้งค่านี้เพื่อใช้รหัสผ่านที่คุณเลือกเอง ดู[รหัสผ่าน](#รหัสผ่าน) |
+| `SD_SCRIPTS_GUI_PASSWORD` | ไม่ตั้ง | รหัสผ่านสำหรับหน้าเข้าสู่ระบบของ GUI ถ้าไม่ตั้ง container จะสร้างรหัสผ่านสุ่มทุกครั้งที่เริ่มและแสดงใน log ของ container ตั้งค่านี้เพื่อใช้รหัสผ่านที่คุณเลือกเอง ดู[รหัสผ่าน](#รหัสผ่าน) |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH` | ไม่ตั้ง | `1` ปิดรหัสผ่านของ GUI ใช้เฉพาะเมื่ออยู่หลัง proxy ของคุณเองที่ยืนยันตัวตนผู้ใช้อยู่แล้ว |
 | `JUPYTER_PASSWORD` | ไม่ตั้ง | token ของ JupyterLab ถ้าไม่ตั้ง Jupyter จะสร้าง token สุ่มแล้วแสดงใน log ของ container ค่านี้ส่งให้ Jupyter ผ่าน environment จึงไม่โผล่ใน `ps` |
 | `ENABLE_JUPYTER` | `1` | ตั้งเป็น `0` เพื่อปิด JupyterLab |
+| `SD_SCRIPTS_GUI_MCP` | `1` | `0` ปิด endpoint MCP (`/api/mcp`) สำหรับ AI agent ดู [MCP สำหรับ AI agent](#mcp-สำหรับ-ai-agent) |
 | `PORT` | `8000` | port ของ GUI |
 | `JUPYTER_PORT` | `8888` | port ของ JupyterLab |
 | `HF_TOKEN` | ไม่ตั้ง | Hugging Face token โหลดเข้า secret store ในหน่วยความจำตอนเริ่ม จำเป็นสำหรับ[โมเดลที่ต้องขอสิทธิ์](downloads.md) |
@@ -49,7 +50,7 @@ Environment variable
 https://<POD_ID>-8000.proxy.runpod.net
 ```
 
-และเปิด JupyterLab ที่ `https://<POD_ID>-8888.proxy.runpod.net` ทั้งสอง URL แสดงอยู่ใน log ของ container ด้วย ถ้าไม่ได้ตั้ง `SD_SCRIPTS_GUI_PASSWORD` ข้อมูลล็อกอินที่สร้างให้จะอยู่ใน log เดียวกัน: เปิดแท็บ **Logs** ของ pod แล้วหาบรรทัด `GUI login: any username / password: ...`
+และเปิด JupyterLab ที่ `https://<POD_ID>-8888.proxy.runpod.net` ทั้งสอง URL แสดงอยู่ใน log ของ container ด้วย ถ้าไม่ได้ตั้ง `SD_SCRIPTS_GUI_PASSWORD` รหัสผ่านที่สร้างให้จะอยู่ใน log เดียวกัน: เปิดแท็บ **Logs** ของ pod แล้วหาบรรทัด `GUI password: ...`
 
 ## Vast.ai
 
@@ -59,7 +60,7 @@ https://<POD_ID>-8000.proxy.runpod.net
 4. ตั้ง environment variable ตามตารางด้านบน แนะนำให้ตั้ง `SD_SCRIPTS_GUI_PASSWORD` ถ้าไม่ตั้ง container จะสร้างรหัสผ่านให้และแสดงใน log ของ instance
 5. ให้ instance มีดิสก์พอสำหรับโฟลเดอร์ `/workspace`
 
-Vast.ai แสดง address และ port ภายนอกของแต่ละ port ที่ map ไว้ในหน้าจอของ instance ให้เปิดอันที่ map ไปยัง `8000` ถ้าไม่ได้ตั้งรหัสผ่าน ข้อมูลล็อกอินที่สร้างให้อยู่ใน log ของ instance (`GUI login: any username / password: ...`)
+Vast.ai แสดง address และ port ภายนอกของแต่ละ port ที่ map ไว้ในหน้าจอของ instance ให้เปิดอันที่ map ไปยัง `8000` ถ้าไม่ได้ตั้งรหัสผ่าน รหัสผ่านที่สร้างให้อยู่ใน log ของ instance (`GUI password: ...`)
 
 ## รหัสผ่าน
 
@@ -67,13 +68,15 @@ GUI **ปลอดภัยตั้งแต่ค่าเริ่มต้�
 
 | สิ่งที่คุณตั้ง | ผลลัพธ์ |
 |---|---|
-| ไม่ตั้งอะไร | สร้างรหัสผ่านสุ่ม**ทุกครั้งที่เริ่ม** และแสดงใน log ของ container เป็น `GUI login: any username / password: ...` หาได้ที่แท็บ **Logs** ของ pod บน Runpod หรือใน log ของ instance บน Vast.ai รหัสผ่านจะเปลี่ยนเมื่อ container รีสตาร์ท |
+| ไม่ตั้งอะไร | สร้างรหัสผ่านสุ่ม**ทุกครั้งที่เริ่ม** และแสดงใน log ของ container เป็น `GUI password: ...` หาได้ที่แท็บ **Logs** ของ pod บน Runpod หรือใน log ของ instance บน Vast.ai รหัสผ่านจะเปลี่ยนเมื่อ container รีสตาร์ท |
 | `SD_SCRIPTS_GUI_PASSWORD` | ค่านั้นคือรหัสผ่าน ใช้เมื่ออยากได้รหัสผ่านเดิมทุกครั้งที่รีสตาร์ท |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH=1` | ไม่มีรหัสผ่าน ใช้เฉพาะเมื่ออยู่หลัง proxy ของคุณเองที่ยืนยันตัวตนผู้ใช้อยู่แล้ว |
 
-GUI ใช้ HTTP Basic authentication เบราว์เซอร์จะถามชื่อผู้ใช้กับรหัสผ่าน ให้ใส่**ชื่อผู้ใช้อะไรก็ได้** และใส่รหัสผ่านตามตาราง รหัสผ่านครอบคลุมทุกหน้าและทุก API route หน้า **ตั้งค่า** จะแสดง **การป้องกันด้วยรหัสผ่าน: เปิด** เมื่อใช้งานอยู่
+เมื่อเปิดรหัสผ่านอยู่ GUI จะเปิดที่หน้าเข้าสู่ระบบ ให้ใส่รหัสผ่านตามตารางในช่อง **รหัสผ่าน** แล้วกด **เข้าสู่ระบบ** ไม่มีชื่อผู้ใช้ การเข้าสู่ระบบหนึ่งครั้งอยู่ได้ 7 วัน กด **ออกจากระบบ** ในหน้า **ตั้งค่า** เพื่อจบก่อนได้ การรีสตาร์ท container จะทำให้ทุกคนออกจากระบบ ถ้าใส่รหัสผ่านผิดติดกันหลายครั้ง เซิร์ฟเวอร์จะให้รอ นานสุดหนึ่งนาที ก่อนลองครั้งถัดไป หน้า **ตั้งค่า** จะแสดง **การป้องกันด้วยรหัสผ่าน: เปิด** เมื่อใช้งานอยู่
 
-Basic authentication **ไม่ได้เข้ารหัส** บน address แบบ `http://` ธรรมดา เช่น port ของ Vast.ai รหัสผ่านจะวิ่งเป็นข้อความธรรมดา ควรใช้ address แบบ HTTPS เช่น URL proxy ของ Runpod ทุกครั้งที่ทำได้ template ต้องไม่ใส่รหัสผ่านตั้งต้นที่ตายตัวมาให้
+สคริปต์และโปรแกรมอื่นไม่ใช้หน้าเข้าสู่ระบบ แต่ส่งรหัสผ่านไปกับทุก request เป็น `Authorization: Bearer <password>` เช่น `curl -H "Authorization: Bearer <password>" https://<POD_ID>-8000.proxy.runpod.net/api/system/status`
+
+การเข้าสู่ระบบ**ไม่ได้เข้ารหัส**บน address แบบ `http://` ธรรมดา เช่น port ของ Vast.ai ทั้งรหัสผ่านและคุกกี้ของการเข้าสู่ระบบวิ่งเป็นข้อความธรรมดา ใครที่อ่านทราฟฟิกได้ก็นำไปใช้ซ้ำได้ ควรใช้ address แบบ HTTPS เช่น URL proxy ของ Runpod ทุกครั้งที่ทำได้ template ต้องไม่ใส่รหัสผ่านตั้งต้นที่ตายตัวมาให้
 
 ## โมเดลความปลอดภัย
 
@@ -90,6 +93,17 @@ Basic authentication **ไม่ได้เข้ารหัส** บน addre
 - อัปโหลดภาพที่ **ชุดข้อมูล (Datasets) > โฟลเดอร์ภาพ** ไฟล์จะอัปโหลดทีละไฟล์ ทำให้แต่ละ request มีขนาดเล็กพอสำหรับ HTTP proxy ของ Runpod และ Vast.ai
 - ดาวน์โหลดโมเดลด้วยหน้า[ดาวน์โหลด](downloads.md) จะดึงจาก Hugging Face เข้า pod โดยตรง เร็วกว่าอัปโหลดจากเครื่องของคุณ
 - Hugging Face token ที่พิมพ์ในหน้า **ตั้งค่า** เก็บไว้ในหน่วยความจำเท่านั้น จึงหายไปเมื่อ pod รีสตาร์ท ถ้าอยากให้มีทุกครั้งที่เริ่ม ให้ใช้ตัวแปร `HF_TOKEN`
+
+## MCP สำหรับ AI agent
+
+GUI ให้บริการ endpoint [MCP](mcp.md) ด้วย AI agent (Claude Code, Claude Desktop, Cursor) จึงควบคุมแอปได้ ทั้งดาวน์โหลดโมเดล เตรียม dataset ใส่งานเข้าคิว และอ่าน log เปิดอยู่เป็นค่าเริ่มต้นและใช้รหัสผ่านเดียวกับ GUI
+
+| ที่ไหน | MCP URL |
+|---|---|
+| Runpod | `https://<POD_ID>-8000.proxy.runpod.net/api/mcp` (แสดงใน log ของ container เป็น `Runpod MCP`) |
+| Vast.ai | `http://<PUBLIC_IP>:<MAPPED_PORT>/api/mcp` หรือผ่าน SSH tunnel: `ssh -p <SSH_PORT> root@<IP> -L 8000:localhost:8000` แล้วใช้ `http://localhost:8000/api/mcp` |
+
+agent ส่งรหัสผ่านเป็น `Authorization: Bearer <password>` เช่น `claude mcp add --transport http sd-scripts-gui <URL> --header "Authorization: Bearer <password>"` ใครที่มีรหัสนี้ก็ควบคุม pod ได้ และบน address `http://` ธรรมดาของ Vast.ai รหัสเดินทางเป็นข้อความที่อ่านออกได้ จึงควรใช้ SSH tunnel ตั้ง `SD_SCRIPTS_GUI_MCP=0` เพื่อปิด endpoint วิธีตั้งค่าแต่ละ client รายการ tool และการแก้ปัญหาอยู่ใน [MCP สำหรับ AI agent](mcp.md)
 
 ## JupyterLab (ตัวสำรองสำหรับผู้ใช้ขั้นสูง)
 

@@ -983,9 +983,25 @@ export const en = {
     'settings.auth': 'Password protection',
     'settings.auth.on': 'On',
     'settings.auth.off': 'Off',
-    'settings.auth.onNote': 'The server asks for a password before it shows any page.',
+    'settings.auth.onNote':
+        'The app opens on a login page and asks for the password. A login lasts 7 days, or until you log out.',
     'settings.auth.offNote':
         'Anyone who can reach this address can use the app. Set SD_SCRIPTS_GUI_PASSWORD on the server to require a password.',
+    'settings.auth.logout': 'Log out',
+    'settings.auth.logoutError': 'Could not log out',
+
+    // ---- login ----
+    'login.title': 'Log in',
+    'login.desc': 'This server is protected by a password.',
+    'login.password': 'Password',
+    'login.submit': 'Log in',
+    'login.submitting': 'Logging in...',
+    'login.wrong': 'Wrong password. Try again.',
+    'login.throttled': 'Too many wrong passwords. Try again in {seconds} {seconds#second|seconds}.',
+    'login.failed': 'Could not log in',
+    'login.unreachable': 'Cannot reach the server',
+    'login.hint':
+        'The password is the SD_SCRIPTS_GUI_PASSWORD value of the server. In the Docker image it is printed in the container log as "GUI password: ...".',
 
     // ---- about ----
     'about.title.before': 'About ',

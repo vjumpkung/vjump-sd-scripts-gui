@@ -19,6 +19,7 @@ GUI แบบเว็บและเดสก์ท็อปสำหรับ 
 - **ตัวอย่างคำสั่ง** ดูคำสั่งจริงก่อนรัน ส่งออกและนำเข้าฟอร์มเป็นไฟล์ JSON config ได้
 - **คิวงาน** รันทีละหนึ่งงาน และ **เริ่ม** แต่ละครั้งรันเพียงหนึ่งงาน มี log สด ความคืบหน้าตาม step และ epoch ดาวน์โหลดผลลัพธ์ทีละไฟล์หรือเป็น zip ยกเลิกแล้วปิด process tree ทั้งหมด ลองใหม่ และสลับลำดับ
 - **เครื่องมือ dataset** อัปโหลดภาพพร้อม caption `.txt` ในเบราว์เซอร์ แก้ caption สร้าง dataset config (TOML) ผ่านฟอร์ม นำเข้า ส่งออก และตรวจสอบ
+- **MCP server สำหรับ AI agent** endpoint [MCP](docs/th/mcp.md) ในตัว (`/api/mcp`) ให้ Claude Code, Claude Desktop หรือ Cursor ดาวน์โหลดโมเดล เตรียม dataset ใส่งานเข้าคิวและติดตามการเทรนได้ด้วย tool 41 ตัว เปิดอยู่เป็นค่าเริ่มต้น ปิดด้วย `SD_SCRIPTS_GUI_MCP=0`
 - **ดาวน์โหลดโมเดล** ชุดโมเดลจาก Hugging Face ที่ตรวจสอบแล้ว ลงใน workspace ในคลิกเดียว ไฟล์ที่มีอยู่แล้วจะถูกข้าม
 - **ตัวติดตามระบบ** CPU, RAM, การใช้งาน GPU, VRAM และอุณหภูมิขณะงานรัน
 - **รันได้ในที่ที่คุณเทรน** แอปเดสก์ท็อป Windows (`install.bat` กับ `run.bat` ไม่มี `.exe`) หรือ Docker image สำหรับ Runpod และ Vast.ai ที่มี JupyterLab มาด้วย
@@ -62,7 +63,7 @@ GUI แบบเว็บและเดสก์ท็อปสำหรับ 
 | Volume | mount ที่ `/workspace` |
 | Environment | `SD_SCRIPTS_GUI_PASSWORD` (แนะนำ), `JUPYTER_PASSWORD`, `HF_TOKEN` (ไม่บังคับ) |
 
-GUI ปลอดภัยตั้งแต่ค่าเริ่มต้น ถ้าไม่ตั้ง `SD_SCRIPTS_GUI_PASSWORD` container จะสร้างรหัสผ่านสุ่มทุกครั้งที่เริ่ม และแสดงใน log ของ container เป็น `GUI login: any username / password: ...` (แท็บ **Logs** ของ pod บน Runpod หรือ log ของ instance บน Vast.ai) ล็อกอินด้วยชื่อผู้ใช้อะไรก็ได้ Basic authentication เป็นข้อความธรรมดาบน `http://` จึงควรใช้ URL แบบ HTTPS การล็อกอินเท่ากับควบคุมเครื่องได้เต็มที่ เหมือน Jupyter
+GUI ปลอดภัยตั้งแต่ค่าเริ่มต้น ถ้าไม่ตั้ง `SD_SCRIPTS_GUI_PASSWORD` container จะสร้างรหัสผ่านสุ่มทุกครั้งที่เริ่ม และแสดงใน log ของ container เป็น `GUI password: ...` (แท็บ **Logs** ของ pod บน Runpod หรือ log ของ instance บน Vast.ai) ให้ใส่ในหน้าเข้าสู่ระบบ รหัสผ่านและคุกกี้ของการเข้าสู่ระบบเป็นข้อความธรรมดาบน `http://` จึงควรใช้ URL แบบ HTTPS การล็อกอินเท่ากับควบคุมเครื่องได้เต็มที่ เหมือน Jupyter
 
 บน Runpod เริ่มได้เร็วที่สุดด้วย template สำเร็จรูป: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga) เปิด GUI ที่ `https://<POD_ID>-8000.proxy.runpod.net` รายละเอียด: [Cloud: Runpod และ Vast.ai](docs/th/cloud-runpod-vast.md)
 
@@ -73,6 +74,7 @@ GUI ปลอดภัยตั้งแต่ค่าเริ่มต้น 
 | [ภาพรวม](docs/th/index.md) | แอปคืออะไรและจัดโครงสร้างอย่างไร |
 | [ติดตั้งบน Windows](docs/th/install-windows.md) | `install.bat`, `run.bat`, การอัปเดต |
 | [Cloud: Runpod และ Vast.ai](docs/th/cloud-runpod-vast.md) | Docker image, port, รหัสผ่าน, JupyterLab |
+| [MCP สำหรับ AI agent](docs/th/mcp.md) | ให้ AI agent ควบคุมแอป: วิธีตั้งค่า Claude Code, Claude Desktop, Cursor |
 | [เริ่มต้นใช้งาน](docs/th/quick-start.md) | เทรน LoRA ตัวแรก พร้อมภาพหน้าจอ |
 | [ชุดข้อมูล (Datasets)](docs/th/datasets.md) | โฟลเดอร์ภาพ, caption, dataset config |
 | [การเทรน](docs/th/training.md) | Preset, พารามิเตอร์, ตัวอย่างคำสั่ง, เคล็ดลับประหยัดหน่วยความจำ |

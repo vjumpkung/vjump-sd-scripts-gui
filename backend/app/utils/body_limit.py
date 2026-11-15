@@ -7,9 +7,14 @@ import re
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ..config import MCP_PATH
+
 FOLDER_UPLOAD = re.compile(r"^/api/datasets/folders/[^/]+/files$")
 IMPORT_PATH = "/api/datasets/import"
 IMPORT_MAX_BYTES = 1024 * 1024
+# The MCP library refuses larger request bodies itself (plain-text 413); answering
+# first keeps the error a JSON one.
+MCP_MAX_BODY_BYTES = 4 * 1024 * 1024
 OVERHEAD_BYTES = 1024 * 1024  # multipart framing and the optional caption field
 
 
@@ -30,6 +35,8 @@ class UploadBodyLimitMiddleware:
             return self.upload_limit
         if method == "POST" and path == IMPORT_PATH:
             return self.import_limit
+        if method == "POST" and path == MCP_PATH:
+            return MCP_MAX_BODY_BYTES
         return None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

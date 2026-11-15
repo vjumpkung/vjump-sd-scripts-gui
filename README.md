@@ -19,6 +19,7 @@ A web and desktop GUI for [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-s
 - **Command preview.** See the exact command before you run it. Export and import the form as a JSON config.
 - **Job queue.** Jobs run one at a time, and each **Start** runs exactly one job. Live log, progress by step and epoch, per-file and zip download of the results, cancel that kills the whole process tree, retry, reorder.
 - **Dataset tools.** Upload images with `.txt` captions in the browser, edit captions, build dataset configs (TOML) in a form, import, export and validate them.
+- **MCP server for AI agents.** A built-in [MCP](docs/en/mcp.md) endpoint (`/api/mcp`) lets Claude Code, Claude Desktop or Cursor download models, prepare datasets, queue and monitor training with 41 tools. On by default; `SD_SCRIPTS_GUI_MCP=0` turns it off.
 - **Model downloads.** One-click, verified Hugging Face bundles into the workspace. Files already there are skipped.
 - **System monitor.** CPU, RAM, GPU utilization, VRAM and temperature while a job runs.
 - **Runs where you train.** A Windows desktop app (`install.bat` and `run.bat`, no `.exe`) or a Docker image for Runpod and Vast.ai with JupyterLab included.
@@ -62,7 +63,7 @@ Use the image `ghcr.io/vjumpkung/vjump-sd-scripts-gui:latest`.
 | Volume | mounted at `/workspace` |
 | Environment | `SD_SCRIPTS_GUI_PASSWORD` (recommended), `JUPYTER_PASSWORD`, `HF_TOKEN` (optional) |
 
-The GUI is secure by default. If you do not set `SD_SCRIPTS_GUI_PASSWORD`, the container generates a random password at every start and prints it in the container log as `GUI login: any username / password: ...` (the **Logs** tab of a Runpod pod, or the Vast.ai instance log). Log in with any username. Basic authentication is clear text over plain `http://`, so prefer HTTPS URLs. Logging in means full control of the machine, like Jupyter.
+The GUI is secure by default. If you do not set `SD_SCRIPTS_GUI_PASSWORD`, the container generates a random password at every start and prints it in the container log as `GUI password: ...` (the **Logs** tab of a Runpod pod, or the Vast.ai instance log). Type it on the login page. The password and the login cookie are clear text over plain `http://`, so prefer HTTPS URLs. Logging in means full control of the machine, like Jupyter.
 
 On Runpod, the quickest start is the ready-made template: [SD-Scripts GUI Runpod template](https://console.runpod.io/hub/template/pi4l66uzj9?ref=6h6f9kga). The GUI is at `https://<POD_ID>-8000.proxy.runpod.net`. More: [Cloud: Runpod and Vast.ai](docs/en/cloud-runpod-vast.md).
 
@@ -73,6 +74,7 @@ On Runpod, the quickest start is the ready-made template: [SD-Scripts GUI Runpod
 | [Overview](docs/en/index.md) | What the app is and how it is organized |
 | [Install on Windows](docs/en/install-windows.md) | `install.bat`, `run.bat`, updating |
 | [Cloud: Runpod and Vast.ai](docs/en/cloud-runpod-vast.md) | Docker image, ports, password, JupyterLab |
+| [MCP for AI agents](docs/en/mcp.md) | Let an AI agent run the app: setup for Claude Code, Claude Desktop, Cursor |
 | [Quick start](docs/en/quick-start.md) | Your first LoRA, with screenshots |
 | [Datasets](docs/en/datasets.md) | Image folders, captions, dataset configs |
 | [Training](docs/en/training.md) | Presets, parameters, command preview, memory tips |

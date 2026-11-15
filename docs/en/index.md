@@ -12,6 +12,7 @@ SD-Scripts GUI is a web and desktop interface for [kohya-ss sd-scripts](https://
 |---|---|
 | [Install on Windows](install-windows.md) | Requirements, `install.bat`, `run.bat`, `run-browser.bat`, updating, uninstalling |
 | [Cloud: Runpod and Vast.ai](cloud-runpod-vast.md) | The Docker image, ports, environment variables, password, JupyterLab |
+| [MCP for AI agents](mcp.md) | Let Claude Code, Claude Desktop or Cursor drive the app: URLs, authentication, client setup, the 41 tools |
 | [Quick start](quick-start.md) | Your first LoRA, end to end, with screenshots |
 | [Datasets](datasets.md) | Image folders, captions, dataset configs (TOML) |
 | [Training](training.md) | Presets, model files, parameters, command preview, memory tips |

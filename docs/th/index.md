@@ -12,6 +12,7 @@ SD-Scripts GUI คือหน้าจอแบบเว็บและเด�
 |---|---|
 | [ติดตั้งบน Windows](install-windows.md) | ความต้องการของระบบ, `install.bat`, `run.bat`, `run-browser.bat`, การอัปเดต, การถอนการติดตั้ง |
 | [Cloud: Runpod และ Vast.ai](cloud-runpod-vast.md) | Docker image, port, environment variable, รหัสผ่าน, JupyterLab |
+| [MCP สำหรับ AI agent](mcp.md) | ให้ Claude Code, Claude Desktop หรือ Cursor ควบคุมแอป: URL, การยืนยันตัวตน, การตั้งค่า client, tool ทั้ง 41 ตัว |
 | [เริ่มต้นใช้งาน](quick-start.md) | เทรน LoRA ตัวแรกตั้งแต่ต้นจนจบ พร้อมภาพหน้าจอ |
 | [ชุดข้อมูล (Datasets)](datasets.md) | โฟลเดอร์ภาพ, caption, dataset config (TOML) |
 | [การเทรน](training.md) | Preset, ไฟล์โมเดล, พารามิเตอร์, ตัวอย่างคำสั่ง, เคล็ดลับประหยัดหน่วยความจำ |

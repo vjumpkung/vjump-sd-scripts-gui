@@ -21,11 +21,12 @@ import useAccelerationSettings, {
     dynamoBackends,
     isValidAccelerationSettings
 } from '@/hooks/useAccelerationSettings'
+import { useLogout } from '@/hooks/useAuth'
 import { useSystemStatus } from '@/hooks/useSystem'
 import useTheme, { type ThemeMode } from '@/hooks/useTheme'
 import { type Locale, useI18n } from '@/i18n'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { RefreshCwIcon, RotateCcwIcon, SaveIcon, Trash2Icon } from 'lucide-react'
+import { LogOutIcon, RefreshCwIcon, RotateCcwIcon, SaveIcon, Trash2Icon } from 'lucide-react'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 type SecretKey = 'hf_token' | 'wandb_api_key'
@@ -262,6 +263,7 @@ const LOCALES: Array<{ value: Locale; label: string }> = [
 const Settings = () => {
     const { t, locale, setLocale } = useI18n()
     const status = useSystemStatus()
+    const logout = useLogout()
     const settings = useAccelerationSettings((state) => state.settings)
     const setSetting = useAccelerationSettings((state) => state.setSetting)
     const resetSettings = useAccelerationSettings((state) => state.resetSettings)
@@ -453,6 +455,26 @@ const Settings = () => {
                                 ? t('settings.auth.onNote')
                                 : t('settings.auth.offNote')}
                         </p>
+                        {status.data?.auth ? (
+                            <div className="mt-4 flex flex-col items-start gap-2">
+                                <Button
+                                    variant="outline"
+                                    disabled={logout.isPending}
+                                    onClick={() => logout.mutate()}
+                                >
+                                    <LogOutIcon />
+                                    {t('settings.auth.logout')}
+                                </Button>
+                                {logout.error ? (
+                                    <p role="alert" className="text-sm text-destructive">
+                                        {getApiErrorMessage(
+                                            logout.error,
+                                            t('settings.auth.logoutError')
+                                        )}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : null}
                     </Card>
                 </div>
             </div>

@@ -1,5 +1,6 @@
 import { apiClient, apiUrl } from './client'
 import type {
+    AuthStatus,
     CatalogEntry,
     DatasetConfig,
     DatasetInput,
@@ -9,6 +10,7 @@ import type {
     ImageFile,
     ImageFolder,
     JobRequest,
+    LoginRequest,
     PresetsResponse,
     PreviewResponse,
     QueueStatus,
@@ -23,6 +25,7 @@ import type {
 } from './types'
 
 export const queryKeys = {
+    auth: ['auth', 'status'] as const,
     status: ['system', 'status'] as const,
     resources: ['system', 'resources'] as const,
     presets: ['presets'] as const,
@@ -46,6 +49,16 @@ export const mutationKeys = {
 }
 
 const enc = encodeURIComponent
+
+export const authApi = {
+    status: async () => (await apiClient.get<AuthStatus>('/api/auth/status')).data,
+    login: async (body: LoginRequest) => {
+        await apiClient.post('/api/auth/login', body)
+    },
+    logout: async () => {
+        await apiClient.post('/api/auth/logout')
+    }
+}
 
 export const systemApi = {
     status: async () => (await apiClient.get<SystemStatus>('/api/system/status')).data,

@@ -15,8 +15,8 @@ frontend: change it together with the backend schemas, the tests and the fronten
 - `app/routes/` FastAPI routers: HTTP parsing, status codes, responses. Keep them thin.
 - `app/schemas/` Pydantic request models.
 - `app/services/` stateful behaviour: the training queue (`queue_runner.py`), model
-  downloads, the argument schema (`arg_schema.py`), the in-memory secret store and the
-  host resource monitor.
+  downloads, the argument schema (`arg_schema.py`), the in-memory secret store, the
+  login sessions and password backoff (`auth.py`) and the host resource monitor.
 - `app/utils/` stateless helpers: `command_builder.py` (validation and argv),
   `dataset_toml.py`, `process.py` (spawn / kill process trees), `auth.py`,
   `body_limit.py`.
@@ -26,6 +26,11 @@ frontend: change it together with the backend schemas, the tests and the fronten
   (generates the argument schema), `check_argv.py` (checks argv against the real
   parsers) and the bundled snapshot `args_snapshot.json`. They are stdlib-only and never
   import `app`.
+- `app/mcp_server/` the MCP server at `/api/mcp` ([fastmcp](https://gofastmcp.com),
+  stateless JSON Streamable HTTP): 41 tools for AI agents. Each tool calls the matching
+  `/api` route in-process (`loopback.py`) and shapes the answer (`format.py`); it has
+  no business logic of its own. The route sits before the SPA mount in `create_app`
+  and its lifespan runs inside the app's lifespan. See [`../docs/en/mcp.md`](../docs/en/mcp.md).
 - `app/desktop.py` the pywebview launcher (`python -m app.desktop`).
 
 ### Argument schema
@@ -71,8 +76,13 @@ builder.
   refused with 403 unless their `Origin` is listed in `SD_SCRIPTS_GUI_CORS_ORIGINS`.
 - Secrets (Hugging Face token, W&B key) live in memory only, are injected into the
   training environment, and are redacted from logs and errors.
-- Optional HTTP Basic auth (`SD_SCRIPTS_GUI_PASSWORD`) guards every route including
-  the SPA; `SD_SCRIPTS_GUI_ALLOWED_HOSTS` restricts the `Host` header.
+- Optional password protection (`SD_SCRIPTS_GUI_PASSWORD`): the login page trades the password
+  for a 7-day session cookie (`HttpOnly`, `SameSite=Strict`, kept in memory, so a restart logs
+  everyone out); `Authorization: Bearer <password>` and Basic (any username) work too. It guards
+  every `/api` route except `/api/auth/status|login|logout`; the SPA shell is public. A rejected
+  request never carries `WWW-Authenticate`. Password checks share one global backoff (after 5
+  failures: 429 with `Retry-After`, up to 60 s). `SD_SCRIPTS_GUI_ALLOWED_HOSTS` restricts the
+  `Host` header.
 
 ## Setup
 
@@ -105,12 +115,13 @@ uv run python -m app.desktop
 | `SD_SCRIPTS_GUI_WEB_DIR` | `<repo>/backend/web` | Built frontend (SPA fallback never applies to `/api/*`) |
 | `SD_SCRIPTS_GUI_SD_SCRIPTS_DIR` | `<repo>/sd-scripts` | sd-scripts checkout |
 | `SD_SCRIPTS_GUI_SD_PYTHON` | `<sd_dir>/venv/Scripts/python.exe` (Windows) / `<sd_dir>/venv/bin/python` | Python of the sd-scripts venv |
-| `SD_SCRIPTS_GUI_PASSWORD` | unset | HTTP Basic auth (any username) for every route. The Docker image generates a random password at every start when it is unset |
+| `SD_SCRIPTS_GUI_PASSWORD` | unset | Password for the login page and for every `/api` route (session cookie, `Authorization: Bearer <password>` or Basic with any username). The Docker image generates a random password at every start when it is unset |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH` | unset | Docker `start.sh` only: `1` disables the auto-generated GUI password (use only behind your own auth proxy) |
 | `SD_SCRIPTS_GUI_ALLOWED_HOSTS` | `*` | Comma list for the trusted-host middleware |
 | `SD_SCRIPTS_GUI_CORS_ORIGINS` | empty (CORS off) | Comma list of allowed cross-origin sites, e.g. `http://localhost:5173` for the Vite dev server |
 | `SD_SCRIPTS_GUI_MAX_UPLOAD_BYTES` | `2147483648` | Per-file upload limit (413 above it) |
 | `SD_SCRIPTS_GUI_DESKTOP` | unset | `1` when started by `app.desktop` |
+| `SD_SCRIPTS_GUI_MCP` | `1` | `0` turns the MCP endpoint `/api/mcp` off (JSON 404) |
 | `HF_TOKEN`, `WANDB_API_KEY` | unset | Seed the in-memory secret store |
 
 `<repo>` is the parent of `backend/`. The app version is read once at startup from

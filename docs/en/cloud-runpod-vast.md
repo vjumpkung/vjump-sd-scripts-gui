@@ -17,10 +17,11 @@ Environment variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SD_SCRIPTS_GUI_PASSWORD` | unset | Password for the GUI (HTTP Basic auth). When unset, the container generates a random password at every start and prints it in the container log. Set it to choose your own: see [Password](#password) |
+| `SD_SCRIPTS_GUI_PASSWORD` | unset | Password for the GUI login page. When unset, the container generates a random password at every start and prints it in the container log. Set it to choose your own: see [Password](#password) |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH` | unset | `1` turns the GUI password off. Only for use behind your own authenticating proxy |
 | `JUPYTER_PASSWORD` | unset | Token for JupyterLab. When unset, Jupyter generates a random token and prints it in the container log. It reaches Jupyter through the environment, so it does not show up in `ps` |
 | `ENABLE_JUPYTER` | `1` | `0` turns JupyterLab off |
+| `SD_SCRIPTS_GUI_MCP` | `1` | `0` turns off the MCP endpoint (`/api/mcp`) for AI agents. See [MCP for AI agents](#mcp-for-ai-agents) |
 | `PORT` | `8000` | Port of the GUI |
 | `JUPYTER_PORT` | `8888` | Port of JupyterLab |
 | `HF_TOKEN` | unset | Hugging Face token, loaded into the in-memory secret store at start. Needed for [gated models](downloads.md) |
@@ -49,7 +50,7 @@ When the pod is running, open the GUI through the Runpod proxy:
 https://<POD_ID>-8000.proxy.runpod.net
 ```
 
-and JupyterLab at `https://<POD_ID>-8888.proxy.runpod.net`. The container log prints both URLs. If you did not set `SD_SCRIPTS_GUI_PASSWORD`, the generated login is in the same log: open the pod's **Logs** tab and look for `GUI login: any username / password: ...`.
+and JupyterLab at `https://<POD_ID>-8888.proxy.runpod.net`. The container log prints both URLs. If you did not set `SD_SCRIPTS_GUI_PASSWORD`, the generated password is in the same log: open the pod's **Logs** tab and look for `GUI password: ...`.
 
 ## Vast.ai
 
@@ -59,7 +60,7 @@ and JupyterLab at `https://<POD_ID>-8888.proxy.runpod.net`. The container log pr
 4. Set the environment variables from the table above. `SD_SCRIPTS_GUI_PASSWORD` is recommended: without it, the container generates a password and prints it in the instance log.
 5. Give the instance enough disk for the `/workspace` folder.
 
-Vast.ai shows the external address and port for each mapped container port in the instance panel. Open the one that maps to `8000`. The instance log holds the generated login if you did not set a password (`GUI login: any username / password: ...`).
+Vast.ai shows the external address and port for each mapped container port in the instance panel. Open the one that maps to `8000`. The instance log holds the generated password if you did not set one (`GUI password: ...`).
 
 ## Password
 
@@ -67,13 +68,15 @@ The GUI is **secure by default**. The ports on Vast.ai are public, so the contai
 
 | You set | Result |
 |---|---|
-| Nothing | A random password is generated **at every start** and printed in the container log as `GUI login: any username / password: ...`. Find it in the **Logs** tab of the Runpod pod, or in the Vast.ai instance log. It changes when the container restarts |
+| Nothing | A random password is generated **at every start** and printed in the container log as `GUI password: ...`. Find it in the **Logs** tab of the Runpod pod, or in the Vast.ai instance log. It changes when the container restarts |
 | `SD_SCRIPTS_GUI_PASSWORD` | That value is the password. Use this to keep the same password across restarts |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH=1` | No password. Use it only behind your own proxy that already authenticates users |
 
-The GUI uses HTTP Basic authentication. The browser asks for credentials: type **any username**, and the password from the table. The password covers every page and every API route. **Settings** shows **Password protection: On** when it is active.
+When a password is active, the GUI opens on a login page. Type the password from the table in the **Password** field and press **Log in**. There is no username. The login lasts 7 days; press **Log out** in **Settings** to end it sooner. Restarting the container logs everyone out. After several wrong passwords in a row the server makes you wait, up to one minute, before the next try. **Settings** shows **Password protection: On** when it is active.
 
-Basic authentication is **not encrypted**. On a plain `http://` address, such as a Vast.ai port, the password travels in clear text. Prefer an HTTPS address, such as the Runpod proxy URL, whenever you can. Templates must not ship a fixed default password.
+Scripts and other programs do not use the login page. They send the password with every request as `Authorization: Bearer <password>`, for example `curl -H "Authorization: Bearer <password>" https://<POD_ID>-8000.proxy.runpod.net/api/system/status`.
+
+The login is **not encrypted** on a plain `http://` address, such as a Vast.ai port: both the password and the login cookie travel in clear text, and anyone who can read the traffic can reuse them. Prefer an HTTPS address, such as the Runpod proxy URL, whenever you can. Templates must not ship a fixed default password.
 
 ## Security model
 
@@ -90,6 +93,17 @@ Once you are in, the app behaves like the desktop one. Follow the [Quick start](
 - Upload images in **Datasets > Image folders**. Files go up one at a time, which keeps each request small enough for the Runpod and Vast.ai HTTP proxies.
 - Download models with [Downloads](downloads.md), straight from Hugging Face to the pod. It is faster than uploading from your computer.
 - The Hugging Face token you type in **Settings** is kept in memory only, so it is gone after the pod restarts. Use the `HF_TOKEN` variable if you want it available at every start.
+
+## MCP for AI agents
+
+The GUI also serves an [MCP](mcp.md) endpoint, so an AI agent (Claude Code, Claude Desktop, Cursor) can drive the app: download models, prepare a dataset, queue a job and read the log. It is on by default and uses the same password as the GUI.
+
+| Where | MCP URL |
+|---|---|
+| Runpod | `https://<POD_ID>-8000.proxy.runpod.net/api/mcp` (printed in the container log as `Runpod MCP`) |
+| Vast.ai | `http://<PUBLIC_IP>:<MAPPED_PORT>/api/mcp`, or through an SSH tunnel: `ssh -p <SSH_PORT> root@<IP> -L 8000:localhost:8000`, then `http://localhost:8000/api/mcp` |
+
+The agent sends the password as `Authorization: Bearer <password>`, for example `claude mcp add --transport http sd-scripts-gui <URL> --header "Authorization: Bearer <password>"`. Whoever has it controls the pod, and on a plain `http://` Vast.ai address it travels in clear text, so prefer the SSH tunnel there. Set `SD_SCRIPTS_GUI_MCP=0` to turn the endpoint off. Setup for each client, the tool list and troubleshooting are in [MCP for AI agents](mcp.md).
 
 ## JupyterLab (backup for advanced users)
 

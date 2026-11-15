@@ -50,7 +50,7 @@ The forms of the training pages are built from an **argument schema**: a list of
 
 ## Workspace and access
 
-**Workspace folder** shows where models, datasets, outputs and logs live. All writes stay inside it. **Password protection** shows **On** or **Off**. In the Docker image it is **On** by default, with a generated or chosen password (see [Cloud](cloud-runpod-vast.md#password)). When it is off, anyone who can reach the address can use the app: set `SD_SCRIPTS_GUI_PASSWORD` on the server to require a password. The desktop app listens on this computer only.
+**Workspace folder** shows where models, datasets, outputs and logs live. All writes stay inside it. **Password protection** shows **On** or **Off**. In the Docker image it is **On** by default, with a generated or chosen password (see [Cloud](cloud-runpod-vast.md#password)). When it is **On**, the app opens on a login page: type the password and press **Log in**. A login lasts 7 days. The **Log out** button, shown only while the password is on, ends it right away and takes you back to the login page. When it is off, anyone who can reach the address can use the app: set `SD_SCRIPTS_GUI_PASSWORD` on the server to require a password. The desktop app listens on this computer only.
 
 ## Security model
 
@@ -59,4 +59,4 @@ The forms of the training pages are built from an **argument schema**: a list of
 - **Write paths are confined to the workspace.** Output, log and cache folders cannot point outside it, and not into the app's own data folder either. This guards against mistakes. It is not a sandbox.
 - **Import only training configs you trust.** For example, `resume_from_huggingface` downloads and loads a training state.
 - **Cross-site requests to the API are blocked**, so a web page you have open in another tab cannot drive the app.
-- Secrets stay in memory only (see [Secrets](#secrets)). On a plain `http://` address, Basic authentication sends the password in clear text: prefer HTTPS.
+- Secrets stay in memory only (see [Secrets](#secrets)). On a plain `http://` address, the password and the login cookie travel in clear text: prefer HTTPS.

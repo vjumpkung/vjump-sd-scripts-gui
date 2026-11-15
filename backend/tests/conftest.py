@@ -18,6 +18,7 @@ ENV_NAMES = (
     "SD_SCRIPTS_GUI_CORS_ORIGINS",
     "SD_SCRIPTS_GUI_MAX_UPLOAD_BYTES",
     "SD_SCRIPTS_GUI_DESKTOP",
+    "SD_SCRIPTS_GUI_MCP",
     "HF_TOKEN",
     "WANDB_API_KEY",
 )
@@ -36,8 +37,8 @@ def paths(tmp_path):
 
 
 @pytest.fixture
-def make_client(paths, monkeypatch):
-    """Build TestClients; keyword arguments are extra environment variables."""
+def make_app(paths, monkeypatch):
+    """Build apps; keyword arguments are extra environment variables."""
     for name in ENV_NAMES:
         monkeypatch.delenv(name, raising=False)
 
@@ -59,7 +60,17 @@ def make_client(paths, monkeypatch):
 
         from app.main import create_app
 
-        return TestClient(create_app())
+        return create_app()
+
+    return factory
+
+
+@pytest.fixture
+def make_client(make_app):
+    """Build TestClients; keyword arguments are extra environment variables."""
+
+    def factory(**env):
+        return TestClient(make_app(**env))
 
     return factory
 

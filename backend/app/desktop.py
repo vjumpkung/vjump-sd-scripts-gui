@@ -109,13 +109,19 @@ def main() -> int:
         return 1
 
     _configure_environment()
-    from .config import load_settings
+    from .config import MCP_PATH, load_settings
 
-    storage = load_settings().data_root / "webview"
+    settings = load_settings()
+    storage = settings.data_root / "webview"
     storage.mkdir(parents=True, exist_ok=True)
 
     webview.settings["ALLOW_DOWNLOADS"] = True
     port = pick_port()
+    if settings.mcp_enabled:
+        # The port can differ between launches when the preferred one is taken.
+        print(
+            f"MCP endpoint (while this window is open): http://{HOST}:{port}{MCP_PATH}"
+        )
     server, thread = start_server(port)
     try:
         webview.create_window(

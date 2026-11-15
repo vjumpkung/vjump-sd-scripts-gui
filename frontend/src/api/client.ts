@@ -12,6 +12,30 @@ export const apiClient = axios.create({
 
 export const apiUrl = (path: string) => `${API_BASE_URL}${path}`
 
+type UnauthorizedHandler = () => void
+
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+/** Called when a request fails with 401 (the session expired or was revoked). */
+export const setUnauthorizedHandler = (handler: UnauthorizedHandler | null) => {
+    unauthorizedHandler = handler
+}
+
+// A wrong password on the login form is a 401 too, so the /api/auth/* calls are left to their caller.
+apiClient.interceptors.response.use(
+    (response) => response,
+    (error: unknown) => {
+        if (
+            axios.isAxiosError(error) &&
+            error.response?.status === 401 &&
+            !(error.config?.url ?? '').startsWith('/api/auth/')
+        ) {
+            unauthorizedHandler?.()
+        }
+        return Promise.reject(error)
+    }
+)
+
 type ValidationItem = { loc?: Array<string | number>; msg?: string }
 
 const describeDetail = (detail: unknown): string | null => {
@@ -48,3 +72,10 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
 
 export const httpStatus = (error: unknown): number | null =>
     axios.isAxiosError(error) ? (error.response?.status ?? null) : null
+
+/** Seconds from a 429's Retry-After header, or null when absent or not a positive integer. */
+export const retryAfterSeconds = (error: unknown): number | null => {
+    if (!axios.isAxiosError(error)) return null
+    const seconds = Number.parseInt(String(error.response?.headers?.['retry-after'] ?? ''), 10)
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null
+}

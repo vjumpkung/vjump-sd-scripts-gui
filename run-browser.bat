@@ -35,6 +35,7 @@ set "SD_SCRIPTS_GUI_ALLOWED_HOSTS=127.0.0.1,localhost"
 cd /d "%~dp0backend"
 
 echo Starting SD-Scripts GUI on "http://127.0.0.1:%PORT%/"
+if not "%SD_SCRIPTS_GUI_MCP%"=="0" echo MCP endpoint for AI agents: "http://127.0.0.1:%PORT%/api/mcp"
 echo Your browser opens when the server is ready. Press Ctrl+C or close this window to stop.
 echo.
 start "" /b cmd /c call "%~f0" --wait-and-open "%PORT%"

@@ -11,11 +11,20 @@ types together.
   single string `detail`. FastAPI's own 422 shape for malformed bodies is acceptable.
 - Status codes (musubi semantics): `200` OK, `201` created, `202` accepted background work, `204`
   deleted / no body, `400` bad path, `401` auth required, `403` cross-site request blocked, `404`
-  unknown resource, `409` state conflict, `413` too large, `422` invalid values, `503` sd-scripts
-  environment unavailable.
+  unknown resource, `409` state conflict, `413` too large, `422` invalid values, `429` too many
+  failed login attempts, `503` sd-scripts environment unavailable.
+- Authentication (only when `SD_SCRIPTS_GUI_PASSWORD` is set): every `/api/*` route needs a login
+  session cookie, `Authorization: Bearer <password>` or `Authorization: Basic` (any username),
+  except `GET /api/auth/status`, `POST /api/auth/login` and `POST /api/auth/logout`. The SPA shell
+  and its assets are public, so the login page can load. A rejected request never carries
+  `WWW-Authenticate`. See [0.1. Authentication](#01-authentication).
+- API docs: Swagger UI at `/api/docs` and the schema at `/api/openapi.json`. Both sit under `/api`,
+  so they need the same credentials as the API. ReDoc is disabled.
 - Cross-site protection (Fetch Metadata): an `/api/*` request whose `Sec-Fetch-Site` header is
   `cross-site` or `same-site` gets a 403, unless its `Origin` is listed in
   `SD_SCRIPTS_GUI_CORS_ORIGINS`. Requests with the header missing, `same-origin`, or `none` pass.
+- MCP: `/api/mcp` is a Model Context Protocol endpoint for AI agents. It reuses the routes below
+  and adds no REST shapes. See [8. MCP endpoint](#8-mcp-endpoint).
 - Security model: anyone who passes auth can run arbitrary code. Model files can contain pickles,
   and `network_module` imports modules. Workspace confinement of write paths guards against
   mistakes and imported configs; it is **not** a sandbox.
@@ -31,17 +40,85 @@ types together.
 | `SD_SCRIPTS_GUI_WEB_DIR` | `<repo>/backend/web` | Built frontend |
 | `SD_SCRIPTS_GUI_SD_SCRIPTS_DIR` | `<repo>/sd-scripts` | sd-scripts checkout |
 | `SD_SCRIPTS_GUI_SD_PYTHON` | `<sd_dir>/venv/Scripts/python.exe` (Windows) / `<sd_dir>/venv/bin/python` | Python of the sd-scripts venv |
-| `SD_SCRIPTS_GUI_PASSWORD` | unset | When set, HTTP Basic auth (any username) guards every route, including the SPA. In Docker, `start.sh` generates a random password and prints it in the container log when this is unset |
+| `SD_SCRIPTS_GUI_PASSWORD` | unset | When set, every `/api/*` route except the three `/api/auth/*` endpoints needs the password: as the login page's session cookie, as `Authorization: Bearer <password>`, or as `Authorization: Basic` with any username. The SPA itself stays public (it shows the login page). In Docker, `start.sh` generates a random password and prints it in the container log as `GUI password: ...` when this is unset |
 | `SD_SCRIPTS_GUI_ALLOW_NO_AUTH` | unset | Docker `start.sh` only. `1` disables the auto-generated password. Use it only behind your own authenticating proxy |
 | `SD_SCRIPTS_GUI_ALLOWED_HOSTS` | `*` | Comma list for TrustedHostMiddleware. The desktop launcher sets `127.0.0.1,localhost` |
 | `SD_SCRIPTS_GUI_CORS_ORIGINS` | empty (disabled) | Comma list of extra allowed origins. Frontend development uses the Vite proxy, so it needs none |
 | `SD_SCRIPTS_GUI_MAX_UPLOAD_BYTES` | `2147483648` (2 GiB) | Per-file upload limit |
 | `SD_SCRIPTS_GUI_DESKTOP` | unset | `1` when launched by `app.desktop` (reported in status) |
+| `SD_SCRIPTS_GUI_MCP` | `1` | `0` turns the MCP endpoint `/api/mcp` off (it then answers a JSON `404`). See [8. MCP endpoint](#8-mcp-endpoint) |
 | `HF_TOKEN`, `WANDB_API_KEY` | unset | Seed the in-memory secret store at startup |
 
 Workspace layout (created at startup if missing): `models/`, `datasets/`, `outputs/`, `logs/`.
 
 Uvicorn must run with exactly one worker, because the queue runner is in-process.
+
+## 0.1. Authentication
+
+Active only when `SD_SCRIPTS_GUI_PASSWORD` is set. One shared password, no usernames. Without a
+password nothing is guarded: `GET /api/auth/status` answers `{"auth_required": false,
+"authenticated": true}` and `POST /api/auth/login` answers `204` without a cookie.
+
+**Public paths.** Everything outside `/api` (the SPA shell and its assets) and exactly
+`/api/auth/status`, `/api/auth/login` and `/api/auth/logout`. Every other `/api/*` path needs
+credentials, unknown paths and the API docs included.
+
+**Accepted credentials**, checked in this order:
+
+1. The session cookie that `POST /api/auth/login` sets.
+2. `Authorization: Bearer <password>`: for scripts and other programs.
+3. `Authorization: Basic <base64(user:password)>`: kept for compatibility; the username is ignored.
+
+A request without valid credentials gets `401` `{"detail": "Authentication required"}`. The
+response never carries `WWW-Authenticate`, because that header makes browsers open their own
+credentials prompt instead of the login page. WebSocket connections under `/api` are closed with
+code `1008` in the same case.
+
+**Session cookie.** `POST /api/auth/login` sets a random 256-bit token as a cookie with
+`HttpOnly`, `SameSite=Strict`, `Path=/` and `Max-Age=604800` (7 days). Over `https://`
+(`request.url.scheme`, honoring `--proxy-headers`) the cookie is named
+`__Host-sd_scripts_gui_session` and has `Secure`; over `http://` it is named
+`sd_scripts_gui_session` and is not `Secure`. The server keeps only the SHA-256 digest of each
+token, in memory: a session ends after 7 days, on logout, when more than 100 sessions exist (the
+oldest goes first), or when the server restarts.
+
+**Brute-force backoff.** All password checks (login, Bearer and Basic) share one global counter, not
+a per-client one, because client addresses behind a proxy can be spoofed. The first 5 consecutive
+wrong passwords are answered normally. After that, password checks are refused with `429`
+`{"detail": "Too many failed login attempts. Try again in N seconds."}` and a `Retry-After: N`
+header (whole seconds) for `min(2^(failures - 5), 60)` seconds; the lock grows with every further
+failure up to 60 seconds. The password is not looked at while locked. A correct password resets the
+counter. A valid session cookie is never throttled. A missing, malformed, empty or stale credential
+is not counted.
+
+Because the counter is global, a client that keeps sending an old password locks out new logins as
+well: the login page and every Bearer or Basic client share the lock. The typical case is an MCP or
+script client still configured with the previous random password after a Docker restart. Update the
+client's credentials after a restart. Sessions that are already logged in (a valid cookie) are not
+affected.
+
+Cross-site browser requests to these endpoints are refused with `403` by the Fetch-Metadata check
+like every other `/api/*` route.
+
+### `GET /api/auth/status` → 200 (public)
+```json
+{ "auth_required": true, "authenticated": false }
+```
+- `auth_required` is false when no password is configured.
+- `authenticated` is true when auth is off or the request carries a valid session cookie. A Bearer or
+  Basic password is deliberately not looked at here, so this call never counts as a failed attempt.
+
+### `POST /api/auth/login` → 204 (public)
+Body: `{"password": "<string, at most 4096 characters>"}`.
+- `204` with `Set-Cookie` (as described above) when the password is right.
+- `204` without a cookie when no password is configured.
+- `401` `{"detail": "Wrong password"}` when it is wrong.
+- `429` with `Retry-After` while the backoff lock is active.
+- `422` for a malformed body.
+
+### `POST /api/auth/logout` → 204 (public)
+Revokes the session of the request's cookie, if any, and clears both cookie names (`Path=/`,
+`Max-Age=0`). Always `204`.
 
 ## 1. System
 
@@ -460,3 +537,39 @@ When `status.desktop` is true and `window.pywebview` exists, the frontend may ca
 - It returns an absolute path string, or `null` if the user cancelled.
 
 In browser mode the frontend uses `/api/fs/list` instead, which only shows workspace files.
+
+## 8. MCP endpoint
+
+`/api/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server for AI agents
+(Claude Code, Claude Desktop, Cursor and others). It is part of this app: no extra process, port or
+login. Setup for each client is in [docs/en/mcp.md](en/mcp.md).
+
+- **Transport.** Streamable HTTP in stateless mode with JSON responses (no SSE, no sessions). The
+  client sends every JSON-RPC message with `POST /api/mcp` and `Accept: application/json,
+  text/event-stream`. `GET /api/mcp` answers `405` because the server never opens a stream. The
+  path has no trailing slash: `/api/mcp/` is redirected with `307` to `/api/mcp` (or answers `401`
+  first when credentials are missing), which many clients do not follow for a `POST`, and behind an
+  HTTPS proxy the redirect may drop the `Authorization` header.
+- **Security.** The path is under `/api`, so it passes the same layers as every other route: the
+  trusted-host check, the Fetch-Metadata check (cross-site browser requests get `403`) and the
+  authentication of [0.1](#01-authentication) (`Authorization: Bearer <password>` for agents; the
+  session cookie and Basic work too). A request without valid credentials gets `401`
+  `{"detail": "Authentication required"}` and no `WWW-Authenticate` header. There is no OAuth: the
+  `/.well-known/*` paths answer `404` (never the SPA's `index.html`).
+- **Size.** A request body above 4 MiB is refused with `413` (the limit of the MCP library, answered
+  here as a JSON error). Use the REST upload route for large images.
+- **Tools.** 41 tools covering everything the frontend does (system, presets and schema, datasets
+  and image folders, downloads, training and the queue). Each tool is an in-process call to the
+  routes in sections 1 to 6: the request goes through the whole app, so validation, locks, error
+  handling and authentication are exactly those of the REST API (the caller's `Authorization`,
+  `Cookie` and `Host` headers are forwarded). The MCP layer adds no business logic and no new REST
+  shapes, so the frontend types do not change. The tool list is in
+  [docs/en/mcp.md](en/mcp.md#5-the-tools).
+- **Results.** Tools return compact JSON text: no absolute paths, no `null` fields, long text cut
+  short, lists with `total`, `returned` and `next_offset` (`null` when complete).
+- **Errors.** An HTTP error from a route becomes an MCP tool error with the text
+  `HTTP <status>: <detail>. <hint>` (a `422` lists every invalid value as `field: message`).
+- **Workflow guide.** The `initialize` result carries `instructions` that describe the order of the
+  tools and the rules (the queue starts paused and each Start runs one job).
+- **Off switch.** `SD_SCRIPTS_GUI_MCP=0` removes the endpoint: `/api/mcp` is then an ordinary
+  unknown route (JSON `404`).

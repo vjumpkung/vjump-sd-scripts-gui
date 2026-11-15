@@ -71,11 +71,17 @@ pids+=("$!")
 # --- URLs -------------------------------------------------------------------
 echo
 echo "SD-Scripts GUI : http://localhost:${gui_port}"
+if [ "${SD_SCRIPTS_GUI_MCP:-1}" != "0" ]; then
+    echo "MCP endpoint   : http://localhost:${gui_port}/api/mcp"
+fi
 if [ "${ENABLE_JUPYTER:-1}" != "0" ]; then
     echo "JupyterLab     : http://localhost:${jupyter_port}"
 fi
 if [ -n "${RUNPOD_POD_ID:-}" ]; then
     echo "Runpod proxy   : https://${RUNPOD_POD_ID}-${gui_port}.proxy.runpod.net"
+    if [ "${SD_SCRIPTS_GUI_MCP:-1}" != "0" ]; then
+        echo "Runpod MCP     : https://${RUNPOD_POD_ID}-${gui_port}.proxy.runpod.net/api/mcp"
+    fi
     if [ "${ENABLE_JUPYTER:-1}" != "0" ]; then
         echo "Runpod Jupyter : https://${RUNPOD_POD_ID}-${jupyter_port}.proxy.runpod.net"
     fi
@@ -83,8 +89,9 @@ fi
 echo
 if [ -n "$generated_pw" ]; then
     echo "================================================================"
-    echo " GUI login: any username / password: ${SD_SCRIPTS_GUI_PASSWORD}"
+    echo " GUI password: ${SD_SCRIPTS_GUI_PASSWORD}"
     echo " (new on every start; set SD_SCRIPTS_GUI_PASSWORD to choose your own)"
+    echo " API and MCP clients send it as: Authorization: Bearer <password>"
     echo "================================================================"
     echo
 fi

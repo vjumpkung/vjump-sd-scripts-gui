@@ -20,7 +20,7 @@ def basic(user, password):
 
 
 # ---------------------------------------------------------------------------
-# Basic auth
+# Password protection (Basic and Bearer; the login page is in test_login.py)
 # ---------------------------------------------------------------------------
 
 
@@ -42,9 +42,8 @@ def test_password_protects_every_api_route(make_client):
         ]:
             response = getattr(client, method)(path)
             assert response.status_code == 401, path
-            assert (
-                response.headers["www-authenticate"] == 'Basic realm="SD-Scripts GUI"'
-            )
+            # A WWW-Authenticate header would make browsers show their own prompt.
+            assert "www-authenticate" not in response.headers, path
             assert response.json() == {"detail": "Authentication required"}
 
 
@@ -66,7 +65,9 @@ def test_any_username_with_the_right_password_is_accepted(make_client):
         basic("admin", PASSWORD[:-1]),
         {"Authorization": "Basic !!!not-base64!!!"},
         {"Authorization": "Basic " + base64.b64encode(PASSWORD.encode()).decode()},
-        {"Authorization": "Bearer " + PASSWORD},
+        {"Authorization": "Bearer wrong"},
+        {"Authorization": "Bearer"},
+        {"Authorization": "Digest " + PASSWORD},
         {"Authorization": "Basic"},
         {"Authorization": ""},
     ],
@@ -83,16 +84,36 @@ def test_password_is_never_returned(make_client):
         assert PASSWORD not in status.text
 
 
-def test_the_spa_is_protected_too(make_client, web_dir):
+def test_the_spa_is_public_but_the_api_is_not(make_client, web_dir):
     with make_client(
         SD_SCRIPTS_GUI_PASSWORD=PASSWORD, SD_SCRIPTS_GUI_WEB_DIR=web_dir
     ) as client:
+        # The login page is part of the SPA, so its shell and assets must load.
         for path in ("/", "/index.html", "/assets/app.js", "/some/client/route"):
+            response = client.get(path)
+            assert response.status_code == 200, path
+            assert "www-authenticate" not in response.headers, path
+        assert "SPA index" in client.get("/").text
+        assert client.get("/api/system/status").status_code == 401
+        assert client.get("/api/nope").status_code == 401
+
+
+def test_the_api_docs_need_authentication(make_client):
+    with make_client(SD_SCRIPTS_GUI_PASSWORD=PASSWORD) as client:
+        for path in ("/api/docs", "/api/openapi.json"):
             assert client.get(path).status_code == 401, path
-        ok = client.get("/", auth=("a", PASSWORD))
-        assert ok.status_code == 200 and "SPA index" in ok.text
-        asset = client.get("/assets/app.js", auth=("a", PASSWORD))
-        assert asset.status_code == 200
+            ok = client.get(path, auth=("a", PASSWORD))
+            assert ok.status_code == 200, path
+        assert "paths" in client.get("/api/openapi.json", auth=("a", PASSWORD)).json()
+        # The old public locations are gone.
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            assert client.get(path).status_code == 404, path
+
+
+def test_the_api_docs_are_served_under_api_without_a_password(client):
+    assert client.get("/api/docs").status_code == 200
+    assert client.get("/api/openapi.json").status_code == 200
+    assert client.get("/api/redoc").status_code == 404
 
 
 def test_cors_preflight_works_without_credentials_and_401_carries_cors(make_client):

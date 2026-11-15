@@ -1,5 +1,11 @@
 /* Types for the backend contract. Source of truth: docs/api.md */
 
+// ---- 0. Authentication -----------------------------------------------------------------------
+
+export type AuthStatus = { auth_required: boolean; authenticated: boolean }
+
+export type LoginRequest = { password: string }
+
 // ---- 1. System -------------------------------------------------------------------------------
 
 export type RescanState = 'idle' | 'running' | 'failed'

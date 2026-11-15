@@ -15,6 +15,8 @@ WORKSPACE_SUBDIRS = ("models", "datasets", "outputs", "logs")
 DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024**3
 # The frontend is served by this app (same origin); enable CORS explicitly for a dev server.
 DEFAULT_CORS_ORIGINS = ""
+# Streamable HTTP endpoint of the MCP server (app/mcp_server).
+MCP_PATH = "/api/mcp"
 
 
 def read_version(path: Path | None = None) -> str:
@@ -91,7 +93,7 @@ class Settings:
         )
     )
     sd_python: Path | None = field(default=None)
-    # None disables HTTP Basic auth.
+    # None disables password protection.
     password: str | None = field(
         default_factory=lambda: os.environ.get("SD_SCRIPTS_GUI_PASSWORD") or None
     )
@@ -110,6 +112,10 @@ class Settings:
     )
     desktop: bool = field(
         default_factory=lambda: os.environ.get("SD_SCRIPTS_GUI_DESKTOP", "") == "1"
+    )
+    # The MCP endpoint is on unless SD_SCRIPTS_GUI_MCP=0.
+    mcp_enabled: bool = field(
+        default_factory=lambda: os.environ.get("SD_SCRIPTS_GUI_MCP", "1").strip() != "0"
     )
     # Read once when the settings are loaded (startup).
     version: str = field(default_factory=read_version)

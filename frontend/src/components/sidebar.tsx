@@ -58,7 +58,7 @@ const NavItem = ({ active, icon, label, indent, onClick }: NavItemProps) => (
     </button>
 )
 
-const Brand = () => {
+export const Brand = () => {
     const { t } = useI18n()
 
     return (
