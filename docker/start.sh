@@ -64,6 +64,7 @@ fi
     cd /opt/app/backend
     exec .venv/bin/python -m uvicorn app.main:app \
         --host 0.0.0.0 --port "$gui_port" --workers 1 \
+        --timeout-graceful-shutdown 5 \
         --proxy-headers --forwarded-allow-ips='*'
 ) &
 pids+=("$!")
