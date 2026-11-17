@@ -23,6 +23,12 @@ types together.
 - Cross-site protection (Fetch Metadata): an `/api/*` request whose `Sec-Fetch-Site` header is
   `cross-site` or `same-site` gets a 403, unless its `Origin` is listed in
   `SD_SCRIPTS_GUI_CORS_ORIGINS`. Requests with the header missing, `same-origin`, or `none` pass.
+  A WebSocket handshake follows the same rule (the connection is closed with code `1008`); one
+  without `Sec-Fetch-Site` that sends an `Origin` is also refused unless that `Origin` is listed or
+  names the same host as the `Host` header (or `X-Forwarded-Host`). See
+  [9. Realtime events](#9-realtime-events-socketio).
+- Realtime: `/api/socket.io/` is a Socket.IO endpoint that pushes invalidation hints, so the
+  frontend does not poll. See [9. Realtime events](#9-realtime-events-socketio).
 - MCP: `/api/mcp` is a Model Context Protocol endpoint for AI agents. It reuses the routes below
   and adds no REST shapes. See [8. MCP endpoint](#8-mcp-endpoint).
 - Security model: anyone who passes auth can run arbitrary code. Model files can contain pickles,
@@ -51,7 +57,8 @@ types together.
 
 Workspace layout (created at startup if missing): `models/`, `datasets/`, `outputs/`, `logs/`.
 
-Uvicorn must run with exactly one worker, because the queue runner is in-process.
+Uvicorn must run with exactly one worker, because the queue runner and the Socket.IO connection
+manager are in-process.
 
 ## 0.1. Authentication
 
@@ -72,7 +79,7 @@ credentials, unknown paths and the API docs included.
 A request without valid credentials gets `401` `{"detail": "Authentication required"}`. The
 response never carries `WWW-Authenticate`, because that header makes browsers open their own
 credentials prompt instead of the login page. WebSocket connections under `/api` are closed with
-code `1008` in the same case.
+code `1008` in the same case (see [9. Realtime events](#9-realtime-events-socketio)).
 
 **Session cookie.** `POST /api/auth/login` sets a random 256-bit token as a cookie with
 `HttpOnly`, `SameSite=Strict`, `Path=/` and `Max-Age=604800` (7 days). Over `https://`
@@ -573,3 +580,64 @@ login. Setup for each client is in [docs/en/mcp.md](en/mcp.md).
   tools and the rules (the queue starts paused and each Start runs one job).
 - **Off switch.** `SD_SCRIPTS_GUI_MCP=0` removes the endpoint: `/api/mcp` is then an ordinary
   unknown route (JSON `404`).
+
+## 9. Realtime events (Socket.IO)
+
+`/api/socket.io/` is a [Socket.IO](https://socket.io) server (Socket.IO protocol v5 over Engine.IO
+v4). It replaces polling: the server pushes **invalidation hints**, and a client re-reads the data
+through the routes in sections 1 to 6. An event names what changed, it never carries the new data,
+with one exception: `system_resources`. The channel adds no REST shapes, so the frontend types of
+the other sections do not change.
+
+- **Connection.** The default namespace `/` only, at the path `/api/socket.io/` (with the trailing
+  slash). A client starts with HTTP long-polling and upgrades to a WebSocket; a client may also open
+  the WebSocket directly. Engine.IO's defaults apply: `pingInterval` 25 s, `pingTimeout` 20 s and
+  `maxPayload` 1,000,000 bytes.
+- **Security.** The path is under `/api`, so it passes the same layers as every other route: the
+  trusted-host check, the Fetch-Metadata check and the authentication of
+  [0.1](#01-authentication). The long-polling requests are plain HTTP: a cross-site request gets
+  `403`, and a request without valid credentials gets `401` `{"detail": "Authentication required"}`.
+  A WebSocket handshake that fails any check is closed with code `1008`. For a WebSocket handshake
+  the Fetch-Metadata check also covers browsers that send no `Sec-Fetch-Site`: it is refused when
+  its `Origin` is neither listed in `SD_SCRIPTS_GUI_CORS_ORIGINS` nor the same host as the `Host`
+  header (or the first value of `X-Forwarded-Host`). Scheme default ports count (`:80` for `http`,
+  `:443` for `https`), and `Origin: null` never matches. A handshake without `Origin` (a script)
+  passes. Engine.IO's own origin check and CORS headers are switched off, so the checks above are
+  the only origin policy.
+- **Errors.** Answers on this path follow the Engine.IO protocol: a malformed request gets a
+  plain-text `400`, not `{"detail": ...}`. Use a Socket.IO client library.
+- **Sessions.** An open connection is not closed when its login session ends (logout, expiry). It
+  only receives hints and, when subscribed, resource snapshots. The `auth` topic tells clients to
+  check `GET /api/auth/status` again.
+
+| Event | Direction | Payload |
+|---|---|---|
+| `invalidate` | server → client | `{"topics": ["training", ...], "logs": ["<job id>", ...]}` |
+| `system_resources` | server → client | the body of `GET /api/system/resources` |
+| `subscribe` | client → server | `"resources"` |
+| `unsubscribe` | client → server | `"resources"` |
+
+**`invalidate`.** `topics` and `logs` are sorted arrays, each possibly empty. Changes are coalesced:
+the server sends at most one `invalidate` per 0.5 s, with the union of everything that changed
+since the last one. A client re-reads what the topics say:
+
+| Topic | Re-read |
+|---|---|
+| `training` | `GET /api/training/queue`, `GET /api/training/jobs` and `GET /api/training/jobs/{id}` |
+| `downloads` | `GET /api/downloads` |
+| `catalog` | `GET /api/downloads/catalog` (a download finished or failed: `present` may have changed) |
+| `status` | `GET /api/system/status` (the schema rescan or the secrets changed) |
+| `auth` | `GET /api/auth/status` (a session was logged out) |
+
+`logs` lists the ids of jobs whose log file grew: read the new text with
+`GET /api/training/jobs/{id}/logs?offset=<next_offset>`. Artifacts (files in the output folder) have
+no event.
+
+**`system_resources`.** Every 5 s the server sends the same JSON as `GET /api/system/resources` to
+the connections that sent `subscribe` with `"resources"`, and to no other. It sends the first
+snapshot 5 s after the subscription, so a client that needs one at once also calls the route.
+`unsubscribe` with `"resources"`, or a disconnect, stops it. Any other `subscribe` or `unsubscribe`
+payload is ignored.
+
+**Missed events.** Nothing is replayed. A client re-reads everything it shows after every connect
+and reconnect, then relies on the hints.
