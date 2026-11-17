@@ -20,6 +20,7 @@ import { Chip } from '@/components/ui/chip'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import useMenuBar from '@/hooks/useMenubar'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
 import { useSystemStatus } from '@/hooks/useSystem'
 import { useI18n } from '@/i18n'
 import { clampPercent, formatBytes, formatGB, formatPercent } from '@/lib/format'
@@ -226,6 +227,7 @@ const Downloads = () => {
     const { t, lookup } = useI18n()
     const queryClient = useQueryClient()
     const status = useSystemStatus()
+    const connected = useRealtimeConnected((state) => state.connected)
     const [family, setFamily] = useState(ALL)
     const [search, setSearch] = useState('')
     const [cancelTarget, setCancelTarget] = useState<{
@@ -233,13 +235,14 @@ const Downloads = () => {
         job: DownloadJob
     } | null>(null)
 
-    // Poll only while something is downloading, then once more so presence flags catch up.
+    // Without the realtime channel, poll only while something is downloading, then once more so
+    // presence flags catch up.
     const downloadsQuery = useQuery({
         queryKey: queryKeys.downloads,
         queryFn: downloadsApi.list,
         refetchOnMount: 'always',
         refetchInterval: (query) =>
-            query.state.data?.some((job) => isActive(job)) ? POLL_MS : false
+            !connected && query.state.data?.some((job) => isActive(job)) ? POLL_MS : false
     })
     const jobsList = downloadsQuery.data
     const anyActive = Boolean(jobsList?.some((job) => isActive(job)))
@@ -248,7 +251,7 @@ const Downloads = () => {
         queryKey: queryKeys.catalog,
         queryFn: downloadsApi.catalog,
         refetchOnMount: 'always',
-        refetchInterval: anyActive ? 4_000 : false
+        refetchInterval: !connected && anyActive ? 4_000 : false
     })
 
     const wasActive = useRef(false)

@@ -2,6 +2,12 @@ import SystemMonitor from './system_monitor'
 import TerminalComponent, { type TerminalHandle } from './terminal'
 import { queryKeys, trainingApi } from '@/api/api'
 import { getApiErrorMessage } from '@/api/client'
+import {
+    isRealtimeConnected,
+    onInvalidate,
+    onRealtimeConnect,
+    onRealtimeDisconnect
+} from '@/api/realtime'
 import type { JobStatus, TrainingArtifact, TrainingJob } from '@/api/types'
 import PageHeader from '@/components/page_header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -19,6 +25,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
 import { useI18n } from '@/i18n'
 import { clampPercent, formatBytes, formatDateTime, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -77,6 +84,11 @@ const JobLog = ({ job }: JobLogProps) => {
 
     useEffect(() => {
         let cancelled = false
+        // Set once the server reported eof: the job is finished and fully read.
+        let stopped = false
+        let inFlight = false
+        // A wake-up arrived while a fetch was running, so read again right after it.
+        let wakePending = false
         let timer: number | undefined
         let offset = 0
 
@@ -84,7 +96,20 @@ const JobLog = ({ job }: JobLogProps) => {
         setEmpty(true)
         setError(null)
 
+        // At most one timer is ever pending.
+        const schedule = (delay: number) => {
+            window.clearTimeout(timer)
+            timer = window.setTimeout(poll, delay)
+        }
+
         const poll = async () => {
+            if (inFlight) {
+                wakePending = true
+                return
+            }
+            window.clearTimeout(timer)
+            timer = undefined
+            inFlight = true
             try {
                 const chunk = await trainingApi.getLogs(job.id, offset)
                 if (cancelled) return
@@ -94,22 +119,48 @@ const JobLog = ({ job }: JobLogProps) => {
                 }
                 offset = chunk.next_offset
                 setError(null)
-                if (chunk.eof) return
-                timer = window.setTimeout(
-                    poll,
-                    chunk.content.length >= FULL_CHUNK ? 0 : LOG_POLL_MS
-                )
+                if (chunk.eof) {
+                    stopped = true
+                    return
+                }
+                const more = chunk.content.length >= FULL_CHUNK || wakePending
+                wakePending = false
+                if (more) schedule(0)
+                // With the realtime channel up, the next read waits for a wake-up from the server.
+                else if (!isRealtimeConnected()) schedule(LOG_POLL_MS)
             } catch (caught) {
                 if (cancelled) return
                 setError(getApiErrorMessage(caught, fallbackRef.current))
-                timer = window.setTimeout(poll, LOG_POLL_MS)
+                wakePending = false
+                schedule(LOG_POLL_MS)
+            } finally {
+                inFlight = false
             }
         }
+
+        const wake = () => {
+            if (cancelled || stopped) return
+            void poll()
+        }
+
+        // `training` also covers the transition to a terminal state, which delivers the eof chunk.
+        const offInvalidate = onInvalidate((event) => {
+            if (event.logs.includes(job.id) || event.topics.includes('training')) wake()
+        })
+        // Events are not replayed, so read again after a reconnect.
+        const offConnect = onRealtimeConnect(wake)
+        const offDisconnect = onRealtimeDisconnect(() => {
+            if (cancelled || stopped || inFlight || timer !== undefined) return
+            schedule(LOG_POLL_MS)
+        })
         void poll()
 
         return () => {
             cancelled = true
             window.clearTimeout(timer)
+            offInvalidate()
+            offConnect()
+            offDisconnect()
         }
     }, [job.id])
 
@@ -138,6 +189,7 @@ const artifactLabel = (artifact: TrainingArtifact) =>
 const LogViewer = () => {
     const { t, tag } = useI18n()
     const queryClient = useQueryClient()
+    const connected = useRealtimeConnected((state) => state.connected)
     const [selectedId, setSelectedId] = useState('')
     const [cancelTarget, setCancelTarget] = useState<TrainingJob | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<TrainingJob | null>(null)
@@ -146,14 +198,16 @@ const LogViewer = () => {
         queryKey: queryKeys.jobs,
         queryFn: trainingApi.listJobs,
         refetchInterval: (query) =>
-            query.state.data?.some((job) => ACTIVE.includes(job.status))
-                ? POLL_ACTIVE_MS
-                : POLL_IDLE_MS
+            connected
+                ? false
+                : query.state.data?.some((job) => ACTIVE.includes(job.status))
+                  ? POLL_ACTIVE_MS
+                  : POLL_IDLE_MS
     })
     const queueQuery = useQuery({
         queryKey: queryKeys.queue,
         queryFn: trainingApi.getQueue,
-        refetchInterval: POLL_ACTIVE_MS
+        refetchInterval: connected ? false : POLL_ACTIVE_MS
     })
 
     const jobs = jobsQuery.data ?? []

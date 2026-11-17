@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import useDebounced from '@/hooks/useDebounced'
 import useMenuBar from '@/hooks/useMenubar'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
 import { useI18n } from '@/i18n'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -64,6 +65,7 @@ const TrainingAside = ({
     const { t, lookup } = useI18n()
     const queryClient = useQueryClient()
     const go = useMenuBar((state) => state.go)
+    const connected = useRealtimeConnected((state) => state.connected)
     const importRef = useRef<HTMLInputElement>(null)
     const [added, setAdded] = useState<TrainingJob | null>(null)
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -81,7 +83,7 @@ const TrainingAside = ({
     const queue = useQuery({
         queryKey: queryKeys.queue,
         queryFn: trainingApi.getQueue,
-        refetchInterval: 1_500
+        refetchInterval: connected ? false : 1_500
     })
 
     const queueMutation = useMutation({

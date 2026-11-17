@@ -1,12 +1,14 @@
 import { queryKeys, systemApi } from '@/api/api'
 import { getApiErrorMessage } from '@/api/client'
+import { retainResources } from '@/api/realtime'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
 import { useI18n } from '@/i18n'
 import { clampPercent, formatBytes, formatPercent, formatTime } from '@/lib/format'
 import { useQuery } from '@tanstack/react-query'
 import { CpuIcon, GpuIcon, MemoryStickIcon, RefreshCwIcon } from 'lucide-react'
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 const MONITOR_INTERVAL_MS = 5_000
 
@@ -49,10 +51,15 @@ const ResourceMeter = ({ label, icon, percent, detail, note }: ResourceMeterProp
 
 const SystemMonitor = () => {
     const { t, tag } = useI18n()
+    const connected = useRealtimeConnected((state) => state.connected)
+
+    // Ask the server to push resource snapshots for as long as the monitor is on screen.
+    useEffect(() => retainResources(), [])
+
     const resourcesQuery = useQuery({
         queryKey: queryKeys.resources,
         queryFn: systemApi.resources,
-        refetchInterval: MONITOR_INTERVAL_MS,
+        refetchInterval: connected ? false : MONITOR_INTERVAL_MS,
         refetchOnWindowFocus: false
     })
     const resources = resourcesQuery.data

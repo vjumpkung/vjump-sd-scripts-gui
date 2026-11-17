@@ -7,6 +7,7 @@ import TrainingWorkspace from './components/training/training_workspace'
 import { Alert, AlertDescription } from './components/ui/alert'
 import { Button } from './components/ui/button'
 import useMenuBar from './hooks/useMenubar'
+import { useRealtimeSync } from './hooks/useRealtime'
 import { useSystemStatus } from './hooks/useSystem'
 import { useI18n } from './i18n'
 import { Suspense, lazy, useEffect, useRef } from 'react'
@@ -15,6 +16,7 @@ import { Suspense, lazy, useEffect, useRef } from 'react'
 const LogViewer = lazy(() => import('./components/logs/logs'))
 
 export default function App() {
+    useRealtimeSync()
     const { t } = useI18n()
     const page = useMenuBar((state) => state.page)
     const family = useMenuBar((state) => state.family)

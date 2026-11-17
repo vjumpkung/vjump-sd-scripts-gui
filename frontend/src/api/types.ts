@@ -272,3 +272,20 @@ export type TrainingConfigFile = {
     inline_files: Record<string, string>
     accelerate: AccelerateRequest
 }
+
+// ---- 7. Realtime (Socket.IO) ----------------------------------------------------------------
+
+export type RealtimeTopic = 'training' | 'downloads' | 'catalog' | 'status' | 'auth'
+
+// `logs` holds the ids of the jobs whose log file grew.
+export type InvalidateEvent = { topics: RealtimeTopic[]; logs: string[] }
+
+export type ServerToClientEvents = {
+    invalidate: (event: InvalidateEvent) => void
+    system_resources: (snapshot: SystemResourceSnapshot) => void
+}
+
+export type ClientToServerEvents = {
+    subscribe: (topic: 'resources') => void
+    unsubscribe: (topic: 'resources') => void
+}
