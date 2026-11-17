@@ -13,6 +13,9 @@ from app.services.auth import (
     AuthState,
 )
 
+from .conftest import wait_for
+from .helpers import record_events, seen
+
 PASSWORD = "s3cret-pass"
 COOKIE = "sd_scripts_gui_session"
 HOST_COOKIE = "__Host-sd_scripts_gui_session"
@@ -404,3 +407,10 @@ def test_the_service_reports_states_directly():
     disabled = AuthService(None)
     assert not disabled.enabled
     assert disabled.verify_password("anything").state is AuthState.OK
+
+
+def test_logout_publishes_an_auth_event(protected, monkeypatch):
+    events = record_events(monkeypatch, protected.app)
+    assert login(protected).status_code == 204
+    assert protected.post("/api/auth/logout").status_code == 204
+    wait_for(lambda: seen(events, "auth"), timeout=10)

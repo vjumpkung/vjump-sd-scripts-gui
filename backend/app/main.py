@@ -21,7 +21,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
 
 from .config import load_settings
 from .db import Database
@@ -30,6 +30,7 @@ from .services.arg_schema import ArgSchemaService
 from .services.auth import AuthService
 from .services.downloads import DownloadManager
 from .services.queue_runner import QueueRunner, recover_interrupted_jobs
+from .services.realtime import SOCKETIO_PATH, RealtimeHub
 from .services.secrets import SecretStore
 from .utils.auth import AuthMiddleware
 from .utils.body_limit import UploadBodyLimitMiddleware
@@ -52,10 +53,11 @@ async def lifespan(app: FastAPI):
     await recover_interrupted_jobs(db)
 
     secrets = SecretStore()
-    arg_schema = ArgSchemaService(settings)
+    realtime = app.state.realtime
+    arg_schema = ArgSchemaService(settings, realtime=realtime)
     await arg_schema.start()
 
-    runner = QueueRunner(db, settings, secrets)
+    runner = QueueRunner(db, settings, secrets, realtime=realtime)
     await runner.restore_state()
     runner_task = asyncio.create_task(runner.run())
 
@@ -64,7 +66,7 @@ async def lifespan(app: FastAPI):
     app.state.secrets = secrets
     app.state.arg_schema = arg_schema
     app.state.runner = runner
-    app.state.downloads = DownloadManager(settings, secrets)
+    app.state.downloads = DownloadManager(settings, secrets, realtime=realtime)
 
     try:
         # The MCP tools call the routes in-process, so they start after the services.
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
             await terminate_tree(runner.current_process)
         await app.state.downloads.shutdown()
         await arg_schema.shutdown()
+        await realtime.shutdown()
         await db.close()
 
 
@@ -120,6 +123,8 @@ def create_app() -> FastAPI:
     )
     # One instance shared by the auth middleware and the /api/auth routes.
     app.state.auth = AuthService(settings.password)
+    # One hub: the services push invalidation hints through it.
+    app.state.realtime = RealtimeHub()
 
     # Middlewares added first are innermost. Order, outermost first: trusted hosts,
     # CORS (so preflights and 401s carry CORS headers), fetch-metadata check, auth,
@@ -161,6 +166,14 @@ def create_app() -> FastAPI:
         app.router.routes.append(
             Route(MCP_PATH, endpoint=mcp_http, include_in_schema=False)
         )
+
+    # Socket.IO (Engine.IO) serves long-polling over HTTP and the upgrade over a
+    # WebSocket on the same path. Plain routes, not a mount, and before the SPA mount.
+    hub = app.state.realtime
+    app.router.routes.append(
+        Route(SOCKETIO_PATH, endpoint=hub.asgi_app, include_in_schema=False)
+    )
+    app.router.routes.append(WebSocketRoute(SOCKETIO_PATH, endpoint=hub.asgi_app))
 
     if (settings.web_dir / "index.html").is_file():
         app.mount(

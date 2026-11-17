@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from ..schemas.system import SecretsUpdate
 from ..services import system_monitor
 from ..services.arg_schema import ArgSchemaService, RescanError
+from ..services.realtime import STATUS
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -64,4 +65,5 @@ async def update_secrets(payload: SecretsUpdate, request: Request) -> Response:
     store = request.app.state.secrets
     for key in payload.model_fields_set:
         store.set(key, getattr(payload, key))
+    request.app.state.realtime.notify(STATUS)
     return Response(status_code=204)

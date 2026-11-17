@@ -12,6 +12,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "psutil>=7.2",
     "fastmcp>=4.2,<5",
+    "python-socketio>=5.18",
+    "websockets>=17",
 ]
 
 [project.optional-dependencies]

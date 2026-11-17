@@ -14,6 +14,7 @@ from app.services.queue_runner import new_progress, parse_progress
 from app.utils import command_builder
 
 from .conftest import wait_for
+from .helpers import record_events, seen, wait_idle
 
 STUB_SCRIPT = """
 import os
@@ -982,3 +983,78 @@ def test_write_path_and_name_rules_are_enforced_through_the_api(
     )
     assert preview.status_code == 200
     assert any("console_log_file" in e for e in preview.json()["errors"])
+
+
+# ---------------------------------------------------------------------------
+# realtime events
+# ---------------------------------------------------------------------------
+
+
+def test_queue_changes_publish_training_events(training_client, monkeypatch):
+    app = training_client.app
+    events = record_events(monkeypatch, app)
+    dataset_id = make_dataset(training_client)
+
+    def publishes(operation):
+        wait_idle(app)  # whatever came before has been sent: the next event is new
+        start = len(events)
+        operation()
+        wait_for(lambda: seen(events, "training", start=start), timeout=10)
+
+    publishes(lambda: start_queue(training_client))
+    publishes(lambda: training_client.post("/api/training/queue/pause"))
+
+    created = []
+    for _ in range(2):
+        publishes(
+            lambda: created.append(
+                make_job(training_client, dataset_id, f"job{len(created)}")
+            )
+        )
+    first, second = created
+    publishes(
+        lambda: training_client.patch(
+            f"/api/training/jobs/{second['id']}", json={"queue_position": 0}
+        )
+    )
+    publishes(lambda: training_client.post(f"/api/training/jobs/{first['id']}/cancel"))
+    publishes(lambda: training_client.delete(f"/api/training/jobs/{first['id']}"))
+    assert all(
+        data["topics"] == ["training"]
+        for event, data in events
+        if event == "invalidate"
+    )
+
+
+def test_a_running_job_publishes_log_and_training_events(training_client, monkeypatch):
+    app = training_client.app
+    dataset_id = make_dataset(training_client)
+    job = make_job(training_client, dataset_id, mode="progress")
+
+    async def job_status():
+        row = await app.state.db.fetch_one(
+            "SELECT status FROM training_jobs WHERE id = ?", (job["id"],)
+        )
+        return row["status"]
+
+    events = record_events(monkeypatch, app, job_status)
+    start_queue(training_client)
+    wait_status(training_client, job["id"], "completed")
+
+    def completed_event_seen():
+        return any(
+            "training" in data["topics"] and state == "completed"
+            for (event, data), state in zip(list(events), list(events.states))
+            if event == "invalidate"
+        )
+
+    wait_for(completed_event_seen, timeout=10)
+    assert seen(events, job_id=job["id"])
+    # log hints name only jobs: every id in them belongs to a real job
+    logged = {
+        job_id
+        for event, data in events
+        if event == "invalidate"
+        for job_id in data["logs"]
+    }
+    assert logged == {job["id"]}

@@ -7,12 +7,13 @@ import json
 import re
 from collections import deque
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
 from ..config import Settings
 from ..db import Database, utc_now
 from ..utils.command_builder import render_command
 from ..utils.process import spawn, terminate_tree
+from .realtime import TRAINING, RealtimeHub, Topic
 from .secrets import SecretStore
 
 QUEUE_STATE_KEY = "training_queue_state"
@@ -88,10 +89,18 @@ def _has_progress(progress: dict) -> bool:
 
 
 class QueueRunner:
-    def __init__(self, db: Database, settings: Settings, secrets: SecretStore):
+    def __init__(
+        self,
+        db: Database,
+        settings: Settings,
+        secrets: SecretStore,
+        *,
+        realtime: RealtimeHub | None = None,
+    ):
         self.db = db
         self.settings = settings
         self.secrets = secrets
+        self.realtime = realtime
         self.queue_running = asyncio.Event()
         self.wake = asyncio.Event()
         # Serializes pause/start, claiming, cancellation, and reorder decisions
@@ -110,6 +119,10 @@ class QueueRunner:
     def state(self) -> str:
         return "running" if self.queue_running.is_set() else "paused"
 
+    def _changed(self, *topics: Topic) -> None:
+        if self.realtime is not None:
+            self.realtime.notify(*topics)
+
     async def set_state(self, state: str) -> None:
         async with self.claim_lock:
             await self.db.set_setting(QUEUE_STATE_KEY, state)
@@ -118,6 +131,7 @@ class QueueRunner:
                 self.wake.set()
             else:
                 self.queue_running.clear()
+        self._changed(TRAINING)
 
     async def cancel_current(self) -> None:
         """Terminate the currently running job's process tree (cancel endpoint)."""
@@ -154,6 +168,7 @@ class QueueRunner:
         if not await self._claim_job(job_id, log_path):
             return
         await renumber_queue(self.db)
+        self._changed(TRAINING)
 
         argv = json.loads(row["argv_json"])
         if not argv or not Path(argv[0]).is_file():
@@ -169,7 +184,14 @@ class QueueRunner:
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         with log_path.open("ab") as log_file:
-            writer = _LogWriter(log_file, log_path.stat().st_size)
+            realtime = self.realtime
+            writer = _LogWriter(
+                log_file,
+                log_path.stat().st_size,
+                on_write=(
+                    None if realtime is None else lambda: realtime.notify_log(job_id)
+                ),
+            )
             writer.write(
                 self._redact(f"=== train: {render_command(argv)}", job_secrets)
             )
@@ -234,6 +256,7 @@ class QueueRunner:
             ),
         )
         self.current_job_id = None
+        self._changed(TRAINING)
 
     def _redact(self, text: str, job_secrets: tuple[str, ...]) -> str:
         return self.secrets.redact(text, extra=job_secrets)
@@ -243,6 +266,7 @@ class QueueRunner:
             "UPDATE training_jobs SET progress_json = ? WHERE id = ?",
             (json.dumps(progress), job_id),
         )
+        self._changed(TRAINING)
 
     async def _claim_job(self, job_id: str, log_path: Path) -> bool:
         """Atomically claim a queued job while respecting pause and cancellation."""
@@ -297,14 +321,16 @@ class QueueRunner:
                 job_id,
             ),
         )
+        self._changed(TRAINING)
 
 
 class _LogWriter:
     """Append-only log writer with a size cap."""
 
-    def __init__(self, handle, size: int):
+    def __init__(self, handle, size: int, on_write: Callable[[], None] | None = None):
         self.handle = handle
         self.size = size
+        self.on_write = on_write
         self.truncated = False
 
     def write(self, line: str) -> None:
@@ -317,6 +343,8 @@ class _LogWriter:
         self.handle.write(data)
         self.handle.flush()
         self.size += len(data)
+        if self.on_write is not None:
+            self.on_write()
 
 
 async def renumber_queue(db: Database) -> None:

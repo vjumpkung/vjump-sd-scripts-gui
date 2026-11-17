@@ -17,6 +17,14 @@ frontend: change it together with the backend schemas, the tests and the fronten
 - `app/services/` stateful behaviour: the training queue (`queue_runner.py`), model
   downloads, the argument schema (`arg_schema.py`), the in-memory secret store, the
   login sessions and password backoff (`auth.py`) and the host resource monitor.
+- `app/services/realtime.py` the Socket.IO push channel at `/api/socket.io/`
+  ([python-socketio](https://python-socketio.readthedocs.io)). `RealtimeHub` is created
+  once in `create_app` and handed to the queue runner, the download manager and the schema
+  service, which call `notify(...)` after each state change. It coalesces them into one
+  `invalidate` hint per 0.5 s (clients re-read the data through the normal routes) and
+  streams `system_resources` every 5 s to subscribers. Its handlers live there, not in a
+  router; `create_app` registers the ASGI app as a `Route` plus a `WebSocketRoute` before
+  the SPA mount. The connection manager is in memory, so it also needs the single worker.
 - `app/utils/` stateless helpers: `command_builder.py` (validation and argv),
   `dataset_toml.py`, `process.py` (spawn / kill process trees), `auth.py`,
   `body_limit.py`.
@@ -74,6 +82,10 @@ builder.
   shadows installed packages.
 - Browser requests to `/api/*` with `Sec-Fetch-Site: cross-site` or `same-site` are
   refused with 403 unless their `Origin` is listed in `SD_SCRIPTS_GUI_CORS_ORIGINS`.
+  WebSocket handshakes (the Socket.IO channel) follow the same rule and are closed with
+  code 1008; a handshake without `Sec-Fetch-Site` is refused when its `Origin` is not
+  listed and does not match the `Host` header (or `X-Forwarded-Host`). Engine.IO's own
+  origin check and CORS headers are off, so this is the only origin policy.
 - Secrets (Hugging Face token, W&B key) live in memory only, are injected into the
   training environment, and are redacted from logs and errors.
 - Optional password protection (`SD_SCRIPTS_GUI_PASSWORD`): the login page trades the password
@@ -97,7 +109,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
 Always run with a **single worker**: the training queue runner is an asyncio task in
-this process and extra workers would double-execute jobs.
+this process and extra workers would double-execute jobs (and the Socket.IO connection
+manager is in memory too).
 
 Desktop window (Windows):
 

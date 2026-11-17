@@ -6,6 +6,7 @@ from app import config
 from app.config import FALLBACK_VERSION, read_version
 
 from .conftest import wait_for
+from .helpers import record_events
 
 SECRET_A = "hf_super_secret_value"
 SECRET_B = "wandb_super_secret_value"
@@ -334,3 +335,40 @@ def test_failed_rescan_reports_the_error_and_can_be_retried(
         assert (
             client.get("/api/system/status").json()["schema"]["rescan"]["error"] is None
         )
+
+
+# ---------------------------------------------------------------------------
+# realtime events
+# ---------------------------------------------------------------------------
+
+
+def test_rescan_publishes_a_status_event_once_idle(make_client, fake_dump, monkeypatch):
+    fake_dump(FAKE_DUMP_OK)
+    with make_client(SD_SCRIPTS_GUI_SD_PYTHON=sys.executable) as client:
+        arg_schema = client.app.state.arg_schema
+        events = record_events(monkeypatch, client.app, lambda: arg_schema.rescan_state)
+        assert client.post("/api/system/rescan").status_code == 202
+
+        def idle_status_event():
+            return any(
+                "status" in data["topics"] and state == "idle"
+                for (event, data), state in zip(list(events), list(events.states))
+                if event == "invalidate"
+            )
+
+        wait_for(idle_status_event, timeout=30)
+
+
+def test_updating_secrets_publishes_a_status_event(client, monkeypatch):
+    events = record_events(monkeypatch, client.app)
+    assert (
+        client.put("/api/system/secrets", json={"hf_token": SECRET_A}).status_code
+        == 204
+    )
+    wait_for(
+        lambda: any(
+            event == "invalidate" and data["topics"] == ["status"]
+            for event, data in list(events)
+        ),
+        timeout=10,
+    )

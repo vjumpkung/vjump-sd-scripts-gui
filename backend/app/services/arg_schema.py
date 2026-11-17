@@ -27,6 +27,7 @@ from typing import Any
 
 from ..config import Settings
 from ..utils.process import child_env, terminate_tree
+from .realtime import STATUS, RealtimeHub
 
 SDSCRIPTS_DIR = Path(__file__).resolve().parent.parent / "sdscripts"
 BUNDLED_SNAPSHOT = SDSCRIPTS_DIR / "args_snapshot.json"
@@ -73,8 +74,9 @@ def _git_head(sd_dir: Path) -> str | None:
 
 
 class ArgSchemaService:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, *, realtime: RealtimeHub | None = None):
         self.settings = settings
+        self.realtime = realtime
         self.bundled = _load_snapshot(BUNDLED_SNAPSHOT)
         self.generated: dict[str, Any] | None = None
         # Cached `git rev-parse HEAD`; refreshed at startup and after a rescan.
@@ -126,6 +128,10 @@ class ArgSchemaService:
             return stale
         return self.generated is None and source == "bundled"
 
+    def _changed(self) -> None:
+        if self.realtime is not None:
+            self.realtime.notify(STATUS)
+
     def _maybe_auto_regenerate(self) -> None:
         """Start one background regeneration when the served schema is stale."""
         if self._auto_attempted or not self._needs_regeneration():
@@ -135,6 +141,7 @@ class ArgSchemaService:
         self._auto_attempted = True
         self.rescan_state = "running"
         self._task = asyncio.create_task(self._regenerate())
+        self._changed()
 
     def status(self) -> dict[str, Any]:
         snapshot, source, stale = self._active()
@@ -181,6 +188,7 @@ class ArgSchemaService:
         self.rescan_state = "running"
         self.rescan_error = None
         self._task = asyncio.create_task(self._regenerate())
+        self._changed()
 
     async def _regenerate(self) -> None:
         self.rescan_state = "running"
@@ -248,3 +256,4 @@ class ArgSchemaService:
             self._process = None
             with contextlib.suppress(OSError):
                 temporary.unlink(missing_ok=True)
+            self._changed()

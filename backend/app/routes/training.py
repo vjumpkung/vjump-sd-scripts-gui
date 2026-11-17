@@ -20,6 +20,7 @@ from ..presets import PRESETS, Preset
 from ..schemas.training import JobRequest, ReorderRequest
 from ..services.arg_schema import ArgSchemaService
 from ..services.queue_runner import QueueRunner, renumber_queue
+from ..services.realtime import TRAINING, RealtimeHub
 from ..utils import command_builder
 from ..utils.command_builder import (
     DATASET_FILENAME,
@@ -57,6 +58,10 @@ def _settings(request: Request) -> Settings:
 
 def _schemas(request: Request) -> ArgSchemaService:
     return request.app.state.arg_schema
+
+
+def _events(request: Request) -> RealtimeHub:
+    return request.app.state.realtime
 
 
 def _job_response(row) -> dict:
@@ -332,6 +337,7 @@ async def _insert_job(
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
     runner.wake.set()
+    _events(request).notify(TRAINING)
     return _job_response(await _get_job(db, job_id))
 
 
@@ -625,6 +631,7 @@ async def cancel_job(job_id: str, request: Request) -> dict:
         await runner.cancel_current()
     else:
         await runner.set_state("paused")
+    _events(request).notify(TRAINING)
     return _job_response(await _get_job(db, job_id))
 
 
@@ -683,6 +690,7 @@ async def reorder_job(job_id: str, payload: ReorderRequest, request: Request) ->
                     (position, item_id),
                 )
             await db.connection.commit()
+    _events(request).notify(TRAINING)
     return _job_response(await _get_job(db, job_id))
 
 
@@ -697,4 +705,5 @@ async def delete_job(job_id: str, request: Request) -> Response:
     job_dir = settings.jobs_dir / job_id
     if job_dir.is_dir():
         shutil.rmtree(job_dir, ignore_errors=True)
+    _events(request).notify(TRAINING)
     return Response(status_code=204)

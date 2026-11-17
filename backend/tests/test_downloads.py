@@ -11,6 +11,7 @@ from app.download_catalog import DOWNLOAD_MODELS
 from app.schemas.downloads import DownloadFile, DownloadModel
 
 from .conftest import wait_for
+from .helpers import record_events, seen
 
 TOKEN = "hf_test_secret_token"
 EXPECTED_IDS = [
@@ -380,3 +381,42 @@ def test_token_is_seeded_from_the_environment(make_client, bundle):
         assert client.get("/api/system/status").json()["secrets"]["hf_token"] is True
         finished(client, start(client, "one").json()["id"])
     assert all(auth == f"Bearer {TOKEN}" for _, _, auth in seen)
+
+
+def test_a_download_publishes_downloads_then_catalog_events(
+    client, bundle, monkeypatch
+):
+    serve(client, {"main.safetensors": b"main", "shared.safetensors": b"shared"})
+    downloads = client.app.state.downloads
+    events = record_events(
+        monkeypatch,
+        client.app,
+        lambda: {job.id: job.status for job in downloads.jobs.values()},
+    )
+
+    job_id = start(client, "one").json()["id"]
+    wait_for(lambda: seen(events, "downloads"), timeout=10)
+    assert finished(client, job_id)["status"] == "completed"
+
+    def catalog_after_completion():
+        return any(
+            "catalog" in data["topics"] and state.get(job_id) == "completed"
+            for (event, data), state in zip(list(events), list(events.states))
+            if event == "invalidate"
+        )
+
+    wait_for(catalog_after_completion, timeout=10)
+    assert all(
+        set(data["topics"]) <= {"downloads", "catalog"}
+        for event, data in events
+        if event == "invalidate"
+    )
+
+
+def test_a_failed_download_still_refreshes_the_catalog(client, bundle, monkeypatch):
+    serve(client, {}, status={"main.safetensors": 404})
+    events = record_events(monkeypatch, client.app)
+
+    job_id = start(client, "one").json()["id"]
+    assert finished(client, job_id)["status"] == "failed"
+    wait_for(lambda: seen(events, "catalog"), timeout=10)

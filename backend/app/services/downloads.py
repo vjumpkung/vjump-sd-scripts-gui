@@ -16,6 +16,7 @@ from ..config import Settings
 from ..db import utc_now
 from ..download_catalog import DOWNLOAD_MODELS
 from ..schemas.downloads import DownloadModel
+from .realtime import CATALOG, DOWNLOADS, RealtimeHub, Topic
 from .secrets import SecretStore
 
 TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
@@ -90,12 +91,23 @@ def catalog_payload(settings: Settings) -> list[dict]:
 
 
 class DownloadManager:
-    def __init__(self, settings: Settings, secrets: SecretStore):
+    def __init__(
+        self,
+        settings: Settings,
+        secrets: SecretStore,
+        *,
+        realtime: RealtimeHub | None = None,
+    ):
         self.settings = settings
         self.secrets = secrets
+        self.realtime = realtime
         self.transport: httpx.AsyncBaseTransport | None = None
         self.jobs: dict[str, DownloadJob] = {}
         self.reservations: dict[Path, str] = {}
+
+    def _changed(self, *topics: Topic) -> None:
+        if self.realtime is not None:
+            self.realtime.notify(*topics)
 
     def get(self, job_id: str) -> DownloadJob:
         job = self.jobs.get(job_id)
@@ -137,6 +149,7 @@ class DownloadManager:
         for target in targets:
             self.reservations[target] = job.id
         job.task = asyncio.create_task(self._run(job, model))
+        self._changed(DOWNLOADS)
         return job
 
     def _release(self, job: DownloadJob) -> None:
@@ -150,6 +163,7 @@ class DownloadManager:
         token = self.secrets.get("hf_token")
         try:
             job.status = "running"
+            self._changed(DOWNLOADS)
             async with httpx.AsyncClient(
                 transport=self.transport,
                 follow_redirects=True,
@@ -160,6 +174,7 @@ class DownloadManager:
                     job.current_file = file.path
                     if file_present(target, file.size_bytes):
                         job.downloaded_bytes += file.size_bytes
+                        self._changed(DOWNLOADS)
                         continue
                     temporary = target.parent / f".{target.name}.{job.id}.part"
                     created = False
@@ -210,11 +225,13 @@ class DownloadManager:
                                     handle.write(chunk)
                                     written += len(chunk)
                                     job.downloaded_bytes = base + written
+                                    self._changed(DOWNLOADS)
                             if expected is not None and written != expected:
                                 job.error = f"Incomplete download for {file.path}"
                                 return
                             os.replace(temporary, target)
                             job.downloaded_bytes = base + file.size_bytes
+                            self._changed(DOWNLOADS, CATALOG)
                     finally:
                         if created:
                             temporary.unlink(missing_ok=True)
@@ -230,6 +247,7 @@ class DownloadManager:
             if job.error and job.status != "cancelled":
                 job.status = "failed"
             self._release(job)
+            self._changed(DOWNLOADS, CATALOG)
 
     async def cancel(self, job_id: str) -> DownloadJob:
         job = self.get(job_id)
@@ -238,6 +256,7 @@ class DownloadManager:
                 status_code=409, detail=f"A {job.status} job can no longer be cancelled"
             )
         job.status = "cancelled"
+        self._changed(DOWNLOADS)
         if not job.cancel_requested:
             job.cancel_requested = True
             if job.task is not None and not job.task.done():
