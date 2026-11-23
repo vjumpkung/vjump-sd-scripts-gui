@@ -126,7 +126,7 @@ const TrainingAside = ({
     return (
         <aside
             aria-label={t('aside.title')}
-            className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:overflow-y-auto xl:pr-1"
+            className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:scrollbar-gutter-stable xl:overflow-y-auto xl:pr-1"
         >
             <Card compact>
                 <CardHeader className="mb-4">

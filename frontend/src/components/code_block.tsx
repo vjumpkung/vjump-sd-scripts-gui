@@ -94,7 +94,7 @@ export const CodeBlock = ({ code, copyLabel, placeholder, className }: CodeBlock
         <pre
             tabIndex={0}
             translate="no"
-            className="code-scroll max-h-[480px] overflow-auto p-4 pr-12 font-mono text-[0.8125rem] leading-[1.7] break-all whitespace-pre-wrap"
+            className="code-scroll max-h-[480px] scrollbar-gutter-stable overflow-auto p-4 pr-12 font-mono text-[0.8125rem] leading-[1.7] break-all whitespace-pre-wrap"
         >
             {code || <span className="opacity-60">{placeholder}</span>}
         </pre>

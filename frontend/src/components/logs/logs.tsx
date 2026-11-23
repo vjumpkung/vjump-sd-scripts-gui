@@ -352,7 +352,7 @@ const LogViewer = () => {
                         <CardTitle className="text-lg">{t('jobs.list')}</CardTitle>
                         <span className="tabular text-sm text-muted-foreground">{jobs.length}</span>
                     </CardHeader>
-                    <ul className="flex max-h-[70vh] flex-col overflow-y-auto">
+                    <ul className="flex max-h-[70vh] scrollbar-gutter-stable flex-col overflow-y-auto">
                         {jobs.map((job) => {
                             const position = queued.findIndex((item) => item.id === job.id)
                             const isSelected = selected?.id === job.id

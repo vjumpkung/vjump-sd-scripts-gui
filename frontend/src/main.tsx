@@ -7,6 +7,7 @@ import './index.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { initTheme } from '@/hooks/useTheme'
 import { initLocale } from '@/i18n'
+import { initScrollbars } from '@/lib/scrollbars'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -34,6 +35,7 @@ setUnauthorizedHandler(() => {
 
 initTheme()
 initLocale()
+initScrollbars()
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>

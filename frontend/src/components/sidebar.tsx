@@ -253,7 +253,7 @@ const SideBar = ({ onNavigationStart, onNavigationComplete }: SideBarProps) => {
                 </div>
                 <SheetContent
                     side="left"
-                    className="w-[min(20rem,calc(100vw-2rem))] max-w-none overflow-y-auto overscroll-contain p-5"
+                    className="w-[min(20rem,calc(100vw-2rem))] max-w-none scrollbar-gutter-stable overflow-y-auto overscroll-contain p-5"
                     onCloseAutoFocus={(event) => {
                         if (navigationPendingRef.current) {
                             event.preventDefault()
@@ -281,7 +281,7 @@ const SideBar = ({ onNavigationStart, onNavigationComplete }: SideBarProps) => {
 
             <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col gap-6 border-r border-border bg-card p-5 lg:flex">
                 <Brand />
-                <div className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2">
+                <div className="-mx-2 min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto px-2">
                     <NavigationBody onSelect={select} />
                 </div>
                 <SidebarFooter />

@@ -214,6 +214,13 @@
 @layer base {
     * {
         @apply border-border;
+        /* Scrollbars stay invisible until their element scrolls (lib/scrollbars.ts). Set on every
+           element because scrollbar-color is inherited. */
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+    }
+    [data-scrolling] {
+        scrollbar-color: var(--input) transparent;
     }
     :focus-visible {
         outline: 2px solid var(--ring);
@@ -243,12 +250,31 @@
     }
     html {
         @apply font-sans;
-        scrollbar-color: var(--border) transparent;
+        /* Always reserve the gutter, so the layout never moves when a scrollbar comes or goes. */
+        scrollbar-gutter: stable;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
+    /* A Radix scroll lock (dialog, sheet, select) hides the page scrollbar. Meanwhile, drop the
+       gutter, so the overlay covers the whole window, and give its width back as body margin,
+       so nothing moves. Radix's own margin is 0 when the page does not overflow, so the width
+       comes from lib/scrollbars.ts (layered !important beats Radix's unlayered !important). */
+    @supports (scrollbar-gutter: stable) {
+        html:has(> body[data-scroll-locked]) {
+            scrollbar-gutter: auto;
+        }
+        html:has(> body[data-scroll-locked]) > body {
+            margin-right: var(--scrollbar-gutter-width) !important;
+        }
+    }
     ::selection {
         @apply bg-accent text-accent-foreground;
+    }
+    /* High-contrast users keep the system scrollbars. */
+    @media (forced-colors: active) {
+        * {
+            scrollbar-color: auto;
+        }
     }
 }
 
@@ -293,9 +319,10 @@
     }
 }
 
-.code-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: #596674 transparent;
+/* Code Slate surfaces are dark in both themes, so their thumb uses a fixed light slate. */
+.code-scroll[data-scrolling],
+.xterm .xterm-viewport[data-scrolling] {
+    scrollbar-color: #808d9c transparent;
 }
 
 /* Theme switch: the whole page changes at once (DESIGN.md, Motion). */

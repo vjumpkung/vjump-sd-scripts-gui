@@ -107,7 +107,7 @@ const WorkspaceBrowser = ({
                 </nav>
 
                 <div
-                    className="max-h-[22rem] min-h-40 overflow-y-auto rounded-lg border border-border bg-card"
+                    className="max-h-[22rem] min-h-40 scrollbar-gutter-stable overflow-y-auto rounded-lg border border-border bg-card"
                     aria-busy={listing.isFetching}
                 >
                     {listing.isError ? (
