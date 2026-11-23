@@ -61,7 +61,9 @@ The app is reachable from this computer only (`127.0.0.1`). The desktop window k
 
 ## Update
 
-1. Download the new release zip and extract it over the old folder. The `workspace\` folder and `backend\data\` are not part of the zip, so your models, datasets, outputs and job history stay. Or, if you cloned the repository, run `git pull`.
+If you installed from the release zip:
+
+1. Download the new release zip and extract it over the old folder. The `workspace\` folder and `backend\data\` are not part of the zip, so your models, datasets, outputs and job history stay.
 2. Run `install.bat` again. It only installs what changed.
 3. To also update sd-scripts, run it with `UPDATE=1`:
 
@@ -70,7 +72,20 @@ The app is reachable from this computer only (`127.0.0.1`). The desktop window k
    install.bat
    ```
 
-4. Start the app. If a banner says the argument schema is out of date, open **Settings** and press **Rescan arguments**. See [Settings](settings.md).
+If you cloned the repository, close the app first (wait for a running training to finish), then double-click `update.bat`. It needs git, Node.js and [pnpm](https://pnpm.io/installation), and does the following:
+
+| Step | What happens |
+|---|---|
+| App | `git pull --ff-only` of the repository. It stops without changing your files when your local changes or commits are in the way |
+| sd-scripts and environments | Runs `install.bat` with `UPDATE=1`: pulls the latest sd-scripts commit and updates PyTorch, the sd-scripts requirements and the backend |
+| Frontend | Builds the frontend again into `backend\web` |
+| Desktop window cache | Deletes the HTTP cache of the desktop window, so it loads the new frontend. Your theme, language and drafts stay |
+
+`update.bat` stops at the first step, before it changes anything, when the app or a training run started from this folder is still running. The `install.bat` variables above (for example `SD_SCRIPTS_REF` or `TORCH_INDEX_URL`) and `NO_PAUSE=1` work for `update.bat` too.
+
+Then start the app. When sd-scripts changed, the app rebuilds the argument schema in the background on the first start. If a banner says the argument schema is out of date, open **Settings** and press **Rescan arguments**. See [Settings](settings.md).
+
+If the desktop window still shows the previous version after an update, close it, delete the folder `backend\data\webview\EBWebView\Default\Cache` and start `run.bat` again. In a web browser, reload the page with `Ctrl+F5`.
 
 ## Why there is no `.exe`
 

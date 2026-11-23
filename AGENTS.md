@@ -23,7 +23,7 @@ Read [`docs/api.md`](docs/api.md) before you change anything that crosses the ba
 | `.github/workflows/` | `ci.yml` (lint, tests, build, shellcheck) and `release.yml` |
 | `docs/` | `api.md` (the contract), `en/` and `th/` (user documentation), `images/<locale>/` (screenshots) |
 | `scripts/` | `capture_screenshots.py`, which regenerates the documentation screenshots |
-| `install.bat`, `run.bat`, `run-browser.bat` | The Windows installer and launchers. Plain batch, CRLF line endings |
+| `install.bat`, `run.bat`, `run-browser.bat`, `update.bat` | The Windows installer, the launchers and the updater for git clones (`update.bat` is not in the release zip). Plain batch, CRLF line endings. `update.bat` hands off to the freshly pulled copy of itself on the same line as its `git pull`: keep it that way |
 | `VERSION` | The app version. Also the release trigger (see Release flow) |
 
 Generated or runtime folders: `backend/data/`, `backend/web/` (the built frontend), `backend/.venv/`, `sd-scripts/` (the sd-scripts checkout) and `workspace/` (models, datasets, outputs, logs). **Never commit `data/`, `web/`, `sd-scripts/`, `workspace/`, virtual environments, `node_modules/` or `.env` files.** They are in `.gitignore`.
@@ -51,6 +51,7 @@ User-visible text lives in `frontend/src/i18n/en.ts` (the source of truth) and `
 ## Conventions That Must Not Break
 
 - **Thin routes.** Routes parse HTTP input with a schema and delegate. Stateful work goes to `services/`, pure logic to `utils/`. Services never import routers. Keep every route under `/api`; the SPA fallback never applies to `/api/*`.
+- **SPA caching.** `SpaStaticFiles` (`app/main.py`) sends `Cache-Control: public, max-age=31536000, immutable` for files under `assets/` (Vite names them after a hash of their content) and `no-cache` for everything else, `index.html` and the fallback included, so an updated frontend shows up on the next load. A missing `assets/*` file is a JSON 404, never `index.html`. Keep Vite's hashed file names and its default `assetsDir`, and never put an unhashed file under `assets/` (for example in `frontend/public/assets/`): browsers would keep it for a year.
 - **One uvicorn worker.** The queue runner is an asyncio task in the process. More workers would run the same job twice. Never change `--workers 1` in the launchers, the Dockerfile or `start.sh`.
 - **Locks.** Serialize database writes through `db.write_lock`. Change job ownership, status or queue position only under the runner's `claim_lock`, and the write lock where needed. Keep FIFO order and renumber queued positions after cancel or reorder. The queue starts paused and pauses again after each job (so Start runs exactly one job).
 - **argv without a shell.** Build the command as a list and run it without a shell. Scalars are emitted as `--dest=value`, so a value can never become a flag. List items that start with `-` are rejected (no smuggling of `--output_dir` through `network_args`). Never pass untrusted strings to a shell.

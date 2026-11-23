@@ -61,7 +61,9 @@ SD-Scripts GUI ทำงานบน Windows ด้วยไฟล์ batch ส�
 
 ## อัปเดต
 
-1. ดาวน์โหลดไฟล์ zip ของ release ใหม่ แล้วแตกทับโฟลเดอร์เดิม โฟลเดอร์ `workspace\` และ `backend\data\` ไม่ได้อยู่ในไฟล์ zip โมเดล dataset ผลลัพธ์ และประวัติงานของคุณจึงยังอยู่ครบ หรือถ้า clone repository ไว้ ให้รัน `git pull`
+ถ้าติดตั้งจากไฟล์ zip ของ release
+
+1. ดาวน์โหลดไฟล์ zip ของ release ใหม่ แล้วแตกทับโฟลเดอร์เดิม โฟลเดอร์ `workspace\` และ `backend\data\` ไม่ได้อยู่ในไฟล์ zip โมเดล dataset ผลลัพธ์ และประวัติงานของคุณจึงยังอยู่ครบ
 2. รัน `install.bat` อีกครั้ง มันจะติดตั้งเฉพาะสิ่งที่เปลี่ยน
 3. ถ้าต้องการอัปเดต sd-scripts ด้วย ให้รันพร้อม `UPDATE=1`
 
@@ -70,7 +72,20 @@ SD-Scripts GUI ทำงานบน Windows ด้วยไฟล์ batch ส�
    install.bat
    ```
 
-4. เปิดแอป ถ้ามีแถบแจ้งว่า argument schema ล้าสมัย ให้เปิดหน้า **ตั้งค่า** แล้วกด **สแกนอาร์กิวเมนต์ใหม่ (Rescan)** ดู[ตั้งค่า](settings.md)
+ถ้า clone repository ไว้ ให้ปิดแอปก่อน (ถ้ามีงานเทรนอยู่ให้รอจนเสร็จ) แล้วดับเบิลคลิก `update.bat` ซึ่งต้องมี git, Node.js และ [pnpm](https://pnpm.io/installation) และจะทำงานตามนี้
+
+| ขั้นตอน | สิ่งที่เกิดขึ้น |
+|---|---|
+| แอป | `git pull --ff-only` ของ repository ถ้าการแก้ไขหรือ commit ในเครื่องของคุณขวางอยู่ จะหยุดโดยไม่เปลี่ยนไฟล์ของคุณ |
+| sd-scripts และ environment | รัน `install.bat` พร้อม `UPDATE=1` ซึ่งดึง commit ล่าสุดของ sd-scripts และอัปเดต PyTorch, requirements ของ sd-scripts และ backend |
+| Frontend | build frontend ใหม่ลงใน `backend\web` |
+| Cache ของหน้าต่างเดสก์ท็อป | ลบ HTTP cache ของหน้าต่างเดสก์ท็อป เพื่อให้โหลด frontend ใหม่ ธีม ภาษา และ draft ของคุณยังอยู่ครบ |
+
+`update.bat` จะหยุดตั้งแต่ขั้นแรกโดยยังไม่เปลี่ยนอะไรเลย ถ้าแอปหรืองานเทรนที่เปิดจากโฟลเดอร์นี้ยังทำงานอยู่ ตัวแปรของ `install.bat` ด้านบน (เช่น `SD_SCRIPTS_REF` หรือ `TORCH_INDEX_URL`) และ `NO_PAUSE=1` ใช้กับ `update.bat` ได้เช่นกัน
+
+จากนั้นเปิดแอป ถ้า sd-scripts เปลี่ยน แอปจะสร้าง argument schema ใหม่เบื้องหลังตอนเปิดครั้งแรก ถ้ามีแถบแจ้งว่า argument schema ล้าสมัย ให้เปิดหน้า **ตั้งค่า** แล้วกด **สแกนอาร์กิวเมนต์ใหม่ (Rescan)** ดู[ตั้งค่า](settings.md)
+
+ถ้าหน้าต่างเดสก์ท็อปยังแสดงเวอร์ชันเก่าหลังอัปเดต ให้ปิดหน้าต่าง ลบโฟลเดอร์ `backend\data\webview\EBWebView\Default\Cache` แล้วเปิด `run.bat` ใหม่ ถ้าใช้เบราว์เซอร์ ให้โหลดหน้าใหม่ด้วย `Ctrl+F5`
 
 ## ทำไมไม่มีไฟล์ `.exe`
 

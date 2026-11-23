@@ -6,7 +6,13 @@ types together.
 
 - Base path: every route lives under `/api`. Everything else is the SPA, served from `backend/web`
   with an `index.html` fallback. The fallback never applies to `/api/*`, where unknown routes return
-  JSON 404.
+  JSON 404, nor to `/assets/*`, where a missing file is a JSON 404 too (never `index.html` under a
+  script URL).
+- SPA caching: Vite names every file under `/assets/` after a hash of its content, so they are sent
+  with `Cache-Control: public, max-age=31536000, immutable`. Everything else the SPA serves
+  (`index.html`, the fallback, `logo.png`) is sent with `Cache-Control: no-cache` and an `ETag`, so
+  the browser revalidates it on every load (`304` when unchanged) and an updated frontend shows up
+  at once. A `304` carries the same `Cache-Control`.
 - Errors: `{"detail": "<human readable message>"}`. Validation failures we raise ourselves also use a
   single string `detail`. FastAPI's own 422 shape for malformed bodies is acceptable.
 - Status codes (musubi semantics): `200` OK, `201` created, `202` accepted background work, `204`
