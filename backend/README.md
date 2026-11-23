@@ -125,7 +125,7 @@ uv run python -m app.desktop
 | --- | --- | --- |
 | `SD_SCRIPTS_GUI_DATA_ROOT` | `<repo>/backend/data` | SQLite DB, job folders, schema cache |
 | `SD_SCRIPTS_GUI_WORKSPACE_ROOT` | `<repo>/workspace` | `models/`, `datasets/`, `outputs/`, `logs/`; every write path is confined here; training cwd |
-| `SD_SCRIPTS_GUI_WEB_DIR` | `<repo>/backend/web` | Built frontend (SPA fallback never applies to `/api/*`) |
+| `SD_SCRIPTS_GUI_WEB_DIR` | `<repo>/backend/web` | Built frontend. The SPA fallback never applies to `/api/*` or `/assets/*`; `assets/` is cached as immutable, everything else is `no-cache` (see `docs/api.md`) |
 | `SD_SCRIPTS_GUI_SD_SCRIPTS_DIR` | `<repo>/sd-scripts` | sd-scripts checkout |
 | `SD_SCRIPTS_GUI_SD_PYTHON` | `<sd_dir>/venv/Scripts/python.exe` (Windows) / `<sd_dir>/venv/bin/python` | Python of the sd-scripts venv |
 | `SD_SCRIPTS_GUI_PASSWORD` | unset | Password for the login page and for every `/api` route (session cookie, `Authorization: Bearer <password>` or Basic with any username). The Docker image generates a random password at every start when it is unset |

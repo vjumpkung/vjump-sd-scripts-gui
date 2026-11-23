@@ -7,7 +7,8 @@ multiple workers would double-execute jobs.
 
 In production the built Vite frontend is served from ``backend/web`` (an
 ``index.html`` fallback serves client-side routes). API routes always take
-precedence, and unknown ``/api/*`` paths return JSON 404, never ``index.html``.
+precedence, and unknown ``/api/*`` and ``/assets/*`` paths return JSON 404, never
+``index.html``. ``SpaStaticFiles`` sets the caching headers.
 """
 
 from __future__ import annotations
@@ -86,27 +87,51 @@ async def lifespan(app: FastAPI):
         await db.close()
 
 
+def _is_under(path: str, top: str) -> bool:
+    """``path`` (forward slashes) is the folder ``top`` itself or inside it."""
+    return path == top or path.startswith(top + "/")
+
+
 class SpaStaticFiles(StaticFiles):
     """Serve the built frontend; unknown paths fall back to index.html.
 
     Paths under ``api/`` never fall back: they raise 404 so the API keeps returning
-    JSON errors. The same goes for ``.well-known/``.
+    JSON errors. The same goes for ``.well-known/`` and ``assets/``.
+
+    Caching: Vite names every file under ``assets/`` after a hash of its content,
+    so those are immutable. Everything else (index.html, the fallback, logo.png)
+    is ``no-cache``: the browser revalidates it with its ETag on every load and
+    gets a 304 while it is unchanged, so a rebuilt frontend shows up at once.
     """
+
+    # Only content-hashed build output may live in assets/ (Vite's build.assetsDir).
+    HASHED_CACHE_CONTROL = "public, max-age=31536000, immutable"
+    REVALIDATE_CACHE_CONTROL = "no-cache"
 
     async def get_response(self, path: str, scope) -> Response:
         # StaticFiles hands over an OS-normalised path (backslashes on Windows).
         normalized = path.replace(chr(92), "/")
-        if normalized == "api" or normalized.startswith("api/"):
+        if _is_under(normalized, "api"):
             raise StarletteHTTPException(status_code=404)
         # MCP clients probe /.well-known/oauth-* metadata: answer 404, not index.html.
-        if normalized == ".well-known" or normalized.startswith(".well-known/"):
+        if _is_under(normalized, ".well-known"):
             raise StarletteHTTPException(status_code=404)
+        hashed = _is_under(normalized, "assets")
         try:
-            return await super().get_response(path, scope)
+            response = await super().get_response(path, scope)
         except StarletteHTTPException as error:
-            if error.status_code == 404:
-                return await super().get_response("index.html", scope)
-            raise
+            # A missing build file (an old chunk after an update) stays a 404:
+            # index.html under a .js URL breaks the page and, revalidated against
+            # index.html's ETag, would stay cached under that URL.
+            if error.status_code != 404 or hashed:
+                raise
+            response = await super().get_response("index.html", scope)
+        # Set afterwards so that a 304 (NotModifiedResponse) carries it too.
+        if hashed and response.status_code in (200, 304):
+            response.headers["Cache-Control"] = self.HASHED_CACHE_CONTROL
+        else:
+            response.headers["Cache-Control"] = self.REVALIDATE_CACHE_CONTROL
+        return response
 
 
 def create_app() -> FastAPI:

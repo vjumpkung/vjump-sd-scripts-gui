@@ -3,6 +3,7 @@ import base64
 import pytest
 
 PASSWORD = "s3cret-pass"
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 
 @pytest.fixture
@@ -202,6 +203,55 @@ def test_spa_serves_index_assets_and_falls_back(make_client, web_dir):
         fallback = client.get("/datasets/some/route")
         assert fallback.status_code == 200 and "SPA index" in fallback.text
         assert client.get("/api/system/status").json()["version"]  # API wins
+
+
+def test_spa_shell_revalidates_and_hashed_assets_are_immutable(make_client, web_dir):
+    (web_dir / "logo.png").write_bytes(b"\x89PNG\r\n")
+    with make_client(SD_SCRIPTS_GUI_WEB_DIR=web_dir) as client:
+        for path in ("/", "/index.html", "/logo.png", "/datasets/some/route"):
+            response = client.get(path)
+            assert response.status_code == 200, path
+            assert response.headers["cache-control"] == "no-cache", path
+            assert response.headers["etag"], path
+        asset = client.get("/assets/app.js")
+        assert asset.status_code == 200
+        assert asset.headers["cache-control"] == IMMUTABLE
+        # The API is not the SPA: no caching policy of ours there.
+        assert "cache-control" not in client.get("/api/system/status").headers
+
+
+def test_spa_revalidation_is_a_304_until_index_html_changes(make_client, web_dir):
+    with make_client(SD_SCRIPTS_GUI_WEB_DIR=web_dir) as client:
+        for path, policy in (
+            ("/", "no-cache"),
+            ("/datasets/some/route", "no-cache"),
+            ("/assets/app.js", IMMUTABLE),
+        ):
+            etag = client.get(path).headers["etag"]
+            response = client.get(path, headers={"If-None-Match": etag})
+            assert response.status_code == 304, path
+            assert response.headers["cache-control"] == policy, path
+            assert response.headers["etag"] == etag, path
+        # An update rewrites index.html: the old ETag now gets the new file.
+        stale = client.get("/").headers["etag"]
+        (web_dir / "index.html").write_text(
+            "<html>SPA index v2</html>", encoding="utf-8"
+        )
+        fresh = client.get("/", headers={"If-None-Match": stale})
+        assert fresh.status_code == 200 and "v2" in fresh.text
+        assert fresh.headers["cache-control"] == "no-cache"
+        assert fresh.headers["etag"] != stale
+
+
+def test_missing_assets_are_json_404_never_index_html(make_client, web_dir):
+    with make_client(SD_SCRIPTS_GUI_WEB_DIR=web_dir) as client:
+        # An old lazy chunk after an update must not be answered with index.html.
+        for path in ("/assets/logs-CAkc99ji.js", "/assets/gone.css", "/assets"):
+            response = client.get(path)
+            assert response.status_code == 404, path
+            assert response.json() == {"detail": "Not Found"}, path
+            assert "immutable" not in response.headers.get("cache-control", ""), path
+        assert client.get("/assetsfoo").status_code == 200  # not under /assets/
 
 
 def test_unknown_api_routes_return_json_404_never_index_html(make_client, web_dir):
