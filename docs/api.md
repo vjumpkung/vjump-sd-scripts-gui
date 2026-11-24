@@ -590,10 +590,8 @@ login. Setup for each client is in [docs/en/mcp.md](en/mcp.md).
 ## 9. Realtime events (Socket.IO)
 
 `/api/socket.io/` is a [Socket.IO](https://socket.io) server (Socket.IO protocol v5 over Engine.IO
-v4). It replaces polling: the server pushes **invalidation hints**, and a client re-reads the data
-through the routes in sections 1 to 6. An event names what changed, it never carries the new data,
-with one exception: `system_resources`. The channel adds no REST shapes, so the frontend types of
-the other sections do not change.
+v4). The server pushes live log text, training and download progress, and resource snapshots.
+Invalidation events tell clients when to re-read state through the routes in sections 1 to 6.
 
 - **Connection.** The default namespace `/` only, at the path `/api/socket.io/` (with the trailing
   slash). A client starts with HTTP long-polling and upgrades to a WebSocket; a client may also open
@@ -612,20 +610,23 @@ the other sections do not change.
   the only origin policy.
 - **Errors.** Answers on this path follow the Engine.IO protocol: a malformed request gets a
   plain-text `400`, not `{"detail": ...}`. Use a Socket.IO client library.
-- **Sessions.** An open connection is not closed when its login session ends (logout, expiry). It
-  only receives hints and, when subscribed, resource snapshots. The `auth` topic tells clients to
-  check `GET /api/auth/status` again.
+- **Sessions.** A connection authenticated with a login cookie is bound to that session. The
+  server checks the session before sending updates and disconnects sockets whose session has
+  expired or been revoked. The `auth` topic tells other clients to check `GET /api/auth/status`
+  again.
 
 | Event | Direction | Payload |
 |---|---|---|
-| `invalidate` | server → client | `{"topics": ["training", ...], "logs": ["<job id>", ...]}` |
+| `invalidate` | server → client | `{"topics": ["training", ...]}` |
+| `job_log` | server → client | `{"job_id": "<uuid>", "offset": 0, "next_offset": 12, "content": "..."}` |
+| `job_progress` | server → client | `{"job_id": "<uuid>", "progress": {...}}` |
+| `download_progress` | server → client | `{"jobs": [...]}` |
 | `system_resources` | server → client | the body of `GET /api/system/resources` |
-| `subscribe` | client → server | `"resources"` |
-| `unsubscribe` | client → server | `"resources"` |
+| `subscribe` | client → server | `"resources"` or `{"logs": "<uuid>"}` |
+| `unsubscribe` | client → server | `"resources"` or `{"logs": "<uuid>"}` |
 
-**`invalidate`.** `topics` and `logs` are sorted arrays, each possibly empty. Changes are coalesced:
-the server sends at most one `invalidate` per 0.5 s, with the union of everything that changed
-since the last one. A client re-reads what the topics say:
+**`invalidate`.** `topics` is a sorted array. The server coalesces state changes over a 0.5 s
+window. A client re-reads the affected routes.
 
 | Topic | Re-read |
 |---|---|
@@ -635,15 +636,28 @@ since the last one. A client re-reads what the topics say:
 | `status` | `GET /api/system/status` (the schema rescan or the secrets changed) |
 | `auth` | `GET /api/auth/status` (a session was logged out) |
 
-`logs` lists the ids of jobs whose log file grew: read the new text with
-`GET /api/training/jobs/{id}/logs?offset=<next_offset>`. Artifacts (files in the output folder) have
-no event.
+**`job_log`.** Subscribe to a job with `{"logs": "<uuid>"}` and wait for a `true`
+acknowledgment before reading the initial log over HTTP. The event contains the same redacted
+text and UTF-8 byte offsets as the log route. Append contiguous chunks and ignore data already
+read. If the next chunk starts ahead of the current offset, catch up through
+`GET /api/training/jobs/{id}/logs?offset=<offset>`. A burst that exceeds the 64 KiB buffer
+uses an empty chunk with both offsets set to the latest end of the log. Use the same HTTP
+catch-up for that marker. Read once more when the job becomes terminal to confirm `eof`.
+Each connection can subscribe to up to eight jobs. Unsubscribe with the same object or
+disconnect to stop receiving log text.
+
+**`job_progress`.** `progress` has the same fields as the training job response. Update the
+matching job by ID. Queue and job state changes still send `invalidate`.
+
+**`download_progress`.** `jobs` contains the latest values of changed downloads, with the
+same item shape as `GET /api/downloads`. Update matching downloads by ID. Download state and
+catalog changes still send `invalidate`.
 
 **`system_resources`.** Every 5 s the server sends the same JSON as `GET /api/system/resources` to
 the connections that sent `subscribe` with `"resources"`, and to no other. It sends the first
 snapshot 5 s after the subscription, so a client that needs one at once also calls the route.
-`unsubscribe` with `"resources"`, or a disconnect, stops it. Any other `subscribe` or `unsubscribe`
-payload is ignored.
+`unsubscribe` with `"resources"`, or a disconnect, stops it. Artifacts have no event.
 
-**Missed events.** Nothing is replayed. A client re-reads everything it shows after every connect
-and reconnect, then relies on the hints.
+**Missed events.** The server does not replay events. Clients restore subscriptions, re-read
+current state and catch up from the last log offset after reconnecting. Clients may use HTTP
+polling while the Socket.IO connection is unavailable.

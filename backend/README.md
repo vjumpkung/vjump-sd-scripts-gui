@@ -20,10 +20,10 @@ frontend: change it together with the backend schemas, the tests and the fronten
 - `app/services/realtime.py` the Socket.IO push channel at `/api/socket.io/`
   ([python-socketio](https://python-socketio.readthedocs.io)). `RealtimeHub` is created
   once in `create_app` and handed to the queue runner, the download manager and the schema
-  service, which call `notify(...)` after each state change. It coalesces them into one
-  `invalidate` hint per 0.5 s (clients re-read the data through the normal routes) and
-  streams `system_resources` every 5 s to subscribers. Its handlers live there, not in a
-  router; `create_app` registers the ASGI app as a `Route` plus a `WebSocketRoute` before
+  service. It coalesces state invalidations and progress updates over 0.5 s, sends redacted
+  log text to per-job subscribers and streams system resources every 5 s to subscribers.
+  Connections authenticated by a login cookie are checked before data is sent.
+  `create_app` registers the ASGI app as a `Route` plus a `WebSocketRoute` before
   the SPA mount. The connection manager is in memory, so it also needs the single worker.
 - `app/utils/` stateless helpers: `command_builder.py` (validation and argv),
   `dataset_toml.py`, `process.py` (spawn / kill process trees), `auth.py`,
