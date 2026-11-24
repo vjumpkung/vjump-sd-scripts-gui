@@ -277,15 +277,22 @@ export type TrainingConfigFile = {
 
 export type RealtimeTopic = 'training' | 'downloads' | 'catalog' | 'status' | 'auth'
 
-// `logs` holds the ids of the jobs whose log file grew.
-export type InvalidateEvent = { topics: RealtimeTopic[]; logs: string[] }
+export type InvalidateEvent = { topics: RealtimeTopic[] }
+export type JobLogEvent = Omit<TrainingLogChunk, 'eof'> & { job_id: string }
+export type JobProgressEvent = { job_id: string; progress: TrainingProgress }
+export type DownloadProgressEvent = { jobs: DownloadJob[] }
 
 export type ServerToClientEvents = {
     invalidate: (event: InvalidateEvent) => void
+    job_log: (event: JobLogEvent) => void
+    job_progress: (event: JobProgressEvent) => void
+    download_progress: (event: DownloadProgressEvent) => void
     system_resources: (snapshot: SystemResourceSnapshot) => void
 }
 
 export type ClientToServerEvents = {
-    subscribe: (topic: 'resources') => void
-    unsubscribe: (topic: 'resources') => void
+    subscribe: (
+        ...args: [topic: 'resources'] | [topic: { logs: string }, ack: (accepted: boolean) => void]
+    ) => void
+    unsubscribe: (topic: 'resources' | { logs: string }) => void
 }

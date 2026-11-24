@@ -11,8 +11,6 @@ export const realtimeSocket: Socket<ServerToClientEvents, ClientToServerEvents> 
     autoConnect: false
 })
 
-export const isRealtimeConnected = () => realtimeSocket.connected
-
 export const onInvalidate = (handler: (event: InvalidateEvent) => void) => {
     realtimeSocket.on('invalidate', handler)
     return () => {
@@ -27,7 +25,7 @@ export const onRealtimeConnect = (handler: () => void) => {
     }
 }
 
-export const onRealtimeDisconnect = (handler: () => void) => {
+export const onRealtimeDisconnect = (handler: (reason: Socket.DisconnectReason) => void) => {
     realtimeSocket.on('disconnect', handler)
     return () => {
         realtimeSocket.off('disconnect', handler)

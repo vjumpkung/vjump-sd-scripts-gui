@@ -2,13 +2,8 @@ import SystemMonitor from './system_monitor'
 import TerminalComponent, { type TerminalHandle } from './terminal'
 import { queryKeys, trainingApi } from '@/api/api'
 import { getApiErrorMessage } from '@/api/client'
-import {
-    isRealtimeConnected,
-    onInvalidate,
-    onRealtimeConnect,
-    onRealtimeDisconnect
-} from '@/api/realtime'
-import type { JobStatus, TrainingArtifact, TrainingJob } from '@/api/types'
+import { onRealtimeConnect, onRealtimeDisconnect, realtimeSocket } from '@/api/realtime'
+import type { JobLogEvent, JobStatus, TrainingArtifact, TrainingJob } from '@/api/types'
 import PageHeader from '@/components/page_header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -47,8 +42,11 @@ const ACTIVE: JobStatus[] = ['queued', 'running']
 const POLL_ACTIVE_MS = 2_000
 const POLL_IDLE_MS = 5_000
 const LOG_POLL_MS = 2_000
-// The backend serves logs in 64 KiB chunks; a full chunk means there is more to read right away.
-const FULL_CHUNK = 60_000
+// The backend serves logs in 64 KiB chunks. A nearly full chunk means there is more to read right
+// away. Count bytes, not characters: multi-byte text such as tqdm bars decodes to fewer characters.
+const FULL_CHUNK_BYTES = 60_000
+const MAX_BUFFERED_LOG_CHUNKS = 16
+const LOG_SUBSCRIBE_TIMEOUT_MS = 3_000
 
 // queued = muted, running = cyan, completed = yellow, failed = destructive outline, cancelled = muted
 const STATUS_TONE = {
@@ -81,6 +79,14 @@ const JobLog = ({ job }: JobLogProps) => {
     // Read through a ref so changing the language does not restart the stream.
     const fallbackRef = useRef(t('jobs.logError'))
     fallbackRef.current = t('jobs.logError')
+    const terminalJob = !ACTIVE.includes(job.status)
+    const terminalJobRef = useRef(terminalJob)
+    const wakeRef = useRef<(() => void) | undefined>(undefined)
+
+    useEffect(() => {
+        terminalJobRef.current = terminalJob
+        if (terminalJob) wakeRef.current?.()
+    }, [terminalJob])
 
     useEffect(() => {
         let cancelled = false
@@ -91,6 +97,12 @@ const JobLog = ({ job }: JobLogProps) => {
         let wakePending = false
         let timer: number | undefined
         let offset = 0
+        let pushedEnd = 0
+        let subscribed = false
+        let subscriptionRequested = false
+        let subscription = 0
+        const buffered = new Map<number, JobLogEvent>()
+        const topic = { logs: job.id }
 
         terminal.current?.reset()
         setEmpty(true)
@@ -100,6 +112,35 @@ const JobLog = ({ job }: JobLogProps) => {
         const schedule = (delay: number) => {
             window.clearTimeout(timer)
             timer = window.setTimeout(poll, delay)
+        }
+
+        const append = (content: string, nextOffset: number) => {
+            if (content) {
+                terminal.current?.write(content)
+                setEmpty(false)
+            }
+            offset = nextOffset
+        }
+
+        const drain = () => {
+            for (const start of buffered.keys()) {
+                // REST may have read all or part of a queued push. Read any partial overlap
+                // through REST so byte offsets never have to be translated into string indices.
+                if (start < offset) buffered.delete(start)
+            }
+            for (let chunk = buffered.get(offset); chunk; chunk = buffered.get(offset)) {
+                buffered.delete(offset)
+                append(chunk.content, chunk.next_offset)
+            }
+        }
+
+        const unsubscribe = () => {
+            subscription += 1
+            subscribed = false
+            if (subscriptionRequested && realtimeSocket.connected) {
+                realtimeSocket.emit('unsubscribe', topic)
+            }
+            subscriptionRequested = false
         }
 
         const poll = async () => {
@@ -113,21 +154,30 @@ const JobLog = ({ job }: JobLogProps) => {
             try {
                 const chunk = await trainingApi.getLogs(job.id, offset)
                 if (cancelled) return
-                if (chunk.content) {
-                    terminal.current?.write(chunk.content)
-                    setEmpty(false)
-                }
-                offset = chunk.next_offset
-                setError(null)
-                if (chunk.eof) {
-                    stopped = true
+                if (chunk.offset < offset) {
+                    terminal.current?.reset()
+                    setEmpty(true)
+                    buffered.clear()
+                    pushedEnd = 0
+                    offset = 0
+                    schedule(0)
                     return
                 }
-                const more = chunk.content.length >= FULL_CHUNK || wakePending
+                append(chunk.content, chunk.next_offset)
+                drain()
+                setError(null)
+                if (chunk.eof && offset >= pushedEnd) {
+                    stopped = true
+                    unsubscribe()
+                    buffered.clear()
+                    return
+                }
+                const more = chunk.next_offset - chunk.offset >= FULL_CHUNK_BYTES || wakePending
                 wakePending = false
                 if (more) schedule(0)
-                // With the realtime channel up, the next read waits for a wake-up from the server.
-                else if (!isRealtimeConnected()) schedule(LOG_POLL_MS)
+                else if (offset < pushedEnd || !subscribed || terminalJobRef.current) {
+                    schedule(LOG_POLL_MS)
+                }
             } catch (caught) {
                 if (cancelled) return
                 setError(getApiErrorMessage(caught, fallbackRef.current))
@@ -142,25 +192,56 @@ const JobLog = ({ job }: JobLogProps) => {
             if (cancelled || stopped) return
             void poll()
         }
+        wakeRef.current = wake
 
-        // `training` also covers the transition to a terminal state, which delivers the eof chunk.
-        const offInvalidate = onInvalidate((event) => {
-            if (event.logs.includes(job.id) || event.topics.includes('training')) wake()
-        })
-        // Events are not replayed, so read again after a reconnect.
-        const offConnect = onRealtimeConnect(wake)
+        const onLog = (chunk: JobLogEvent) => {
+            if (chunk.job_id !== job.id || stopped || chunk.next_offset <= offset) return
+            pushedEnd = Math.max(pushedEnd, chunk.next_offset)
+            if (chunk.content && chunk.offset >= offset && chunk.next_offset > chunk.offset) {
+                if (buffered.size >= MAX_BUFFERED_LOG_CHUNKS) buffered.clear()
+                buffered.set(chunk.offset, chunk)
+            }
+            if (inFlight) return
+            drain()
+            if (offset < pushedEnd && timer === undefined) schedule(0)
+        }
+        const subscribe = () => {
+            if (stopped || cancelled) return
+            if (terminalJobRef.current) {
+                wake()
+                return
+            }
+            const attempt = ++subscription
+            subscriptionRequested = true
+            realtimeSocket
+                .timeout(LOG_SUBSCRIBE_TIMEOUT_MS)
+                .emit('subscribe', topic, (err, accepted) => {
+                    if (cancelled || stopped || attempt !== subscription) return
+                    subscribed = !err && accepted === true
+                    // Subscribe first so pushes cover any writes after the catch-up request starts.
+                    wake()
+                })
+        }
+        realtimeSocket.on('job_log', onLog)
+        const offConnect = onRealtimeConnect(subscribe)
         const offDisconnect = onRealtimeDisconnect(() => {
+            subscription += 1
+            subscribed = false
+            subscriptionRequested = false
             if (cancelled || stopped || inFlight || timer !== undefined) return
             schedule(LOG_POLL_MS)
         })
-        void poll()
+        if (realtimeSocket.connected) subscribe()
+        else wake()
 
         return () => {
             cancelled = true
             window.clearTimeout(timer)
-            offInvalidate()
+            wakeRef.current = undefined
+            realtimeSocket.off('job_log', onLog)
             offConnect()
             offDisconnect()
+            if (!stopped) unsubscribe()
         }
     }, [job.id])
 

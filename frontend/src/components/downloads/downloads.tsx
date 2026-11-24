@@ -284,10 +284,9 @@ const Downloads = () => {
     const startMutation = useMutation({
         mutationFn: (entry: CatalogEntry) => downloadsApi.start(entry.id),
         onSuccess: (job) =>
-            queryClient.setQueryData<DownloadJob[]>(queryKeys.downloads, (current) => [
-                job,
-                ...(current ?? []).filter((item) => item.id !== job.id)
-            ])
+            queryClient.setQueryData<DownloadJob[]>(queryKeys.downloads, (current) =>
+                current?.some((item) => item.id === job.id) ? current : [job, ...(current ?? [])]
+            )
     })
     const cancelMutation = useMutation({
         mutationFn: (job: DownloadJob) => downloadsApi.cancel(job.id),
