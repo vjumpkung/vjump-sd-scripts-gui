@@ -12,7 +12,7 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from ..services.auth import AuthResult, AuthService, AuthState
+from ..services.auth import AUTH_SESSION_KEY, AuthResult, AuthService, AuthState
 
 PUBLIC_PATHS = frozenset({"/api/auth/status", "/api/auth/login", "/api/auth/logout"})
 
@@ -49,7 +49,9 @@ class AuthMiddleware:
             return
         result = self.auth.authenticate(Headers(scope=scope))
         if result.state is AuthState.OK:
-            await self.app(scope, receive, send)
+            await self.app(
+                {**scope, AUTH_SESSION_KEY: result.session_key}, receive, send
+            )
             return
         if scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})

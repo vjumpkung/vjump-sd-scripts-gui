@@ -132,14 +132,12 @@ def record_events(monkeypatch, app, snapshot=None, deliver=False, coalesce=0.05)
     return events
 
 
-def seen(events, topic=None, job_id=None, start=0) -> bool:
-    """True when an ``invalidate`` at index >= ``start`` names the topic or job log."""
+def seen(events, topic=None, start=0) -> bool:
+    """True when an ``invalidate`` at index >= ``start`` names the topic."""
     for event, data in list(events)[start:]:
         if event != "invalidate":
             continue
         if topic is not None and topic in data["topics"]:
-            return True
-        if job_id is not None and job_id in data["logs"]:
             return True
     return False
 

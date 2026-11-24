@@ -1026,7 +1026,9 @@ def test_queue_changes_publish_training_events(training_client, monkeypatch):
     )
 
 
-def test_a_running_job_publishes_log_and_training_events(training_client, monkeypatch):
+def test_a_running_job_pushes_log_text_progress_and_lifecycle(
+    training_client, monkeypatch
+):
     app = training_client.app
     dataset_id = make_dataset(training_client)
     job = make_job(training_client, dataset_id, mode="progress")
@@ -1038,23 +1040,40 @@ def test_a_running_job_publishes_log_and_training_events(training_client, monkey
         return row["status"]
 
     events = record_events(monkeypatch, app, job_status)
-    start_queue(training_client)
-    wait_status(training_client, job["id"], "completed")
+    with training_client.websocket_connect(
+        "/api/socket.io/?EIO=4&transport=websocket", headers={"upgrade": "websocket"}
+    ) as ws:
+        assert ws.receive_text().startswith("0{")
+        ws.send_text("40")
+        assert ws.receive_text().startswith("40")
+        ws.send_text("421" + json.dumps(["subscribe", {"logs": job["id"]}]))
+        assert ws.receive_text() == "431[true]"
+        start_queue(training_client)
+        wait_status(training_client, job["id"], "completed")
 
-    def completed_event_seen():
-        return any(
-            "training" in data["topics"] and state == "completed"
-            for (event, data), state in zip(list(events), list(events.states))
-            if event == "invalidate"
-        )
+        def completed_event_seen():
+            return any(
+                "training" in data["topics"] and state == "completed"
+                for (event, data), state in zip(list(events), list(events.states))
+                if event == "invalidate"
+            )
 
-    wait_for(completed_event_seen, timeout=10)
-    assert seen(events, job_id=job["id"])
-    # log hints name only jobs: every id in them belongs to a real job
-    logged = {
-        job_id
-        for event, data in events
-        if event == "invalidate"
-        for job_id in data["logs"]
-    }
-    assert logged == {job["id"]}
+        wait_for(completed_event_seen, timeout=10)
+
+    rest = training_client.get(f"/api/training/jobs/{job['id']}/logs").json()
+    offset = 0
+    for chunk in (data for event, data in events if event == "job_log"):
+        assert chunk["job_id"] == job["id"]
+        assert chunk["offset"] == offset
+        offset = chunk["next_offset"]
+        assert offset == chunk["offset"] + len(chunk["content"].encode("utf-8"))
+    assert offset == rest["next_offset"] > 0
+    assert (
+        "".join(data["content"] for event, data in events if event == "job_log")
+        == rest["content"]
+    )
+    progress = [data for event, data in events if event == "job_progress"]
+    assert progress
+    assert all(
+        data["job_id"] == job["id"] and data["progress"]["epoch"] for data in progress
+    )

@@ -20,7 +20,7 @@ from ..presets import PRESETS, Preset
 from ..schemas.training import JobRequest, ReorderRequest
 from ..services.arg_schema import ArgSchemaService
 from ..services.queue_runner import QueueRunner, renumber_queue
-from ..services.realtime import TRAINING, RealtimeHub
+from ..services.realtime import LOG_CHUNK_BYTES, TRAINING, RealtimeHub
 from ..utils import command_builder
 from ..utils.command_builder import (
     DATASET_FILENAME,
@@ -35,7 +35,6 @@ from ..utils.dataset_toml import render_toml
 
 TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 JOB_STATUSES = {"queued", "running", "completed", "failed", "cancelled"}
-LOG_CHUNK_BYTES = 64 * 1024
 ARTIFACT_CHUNK_BYTES = 1024 * 1024
 TRAINING_CONFIG_SCHEMA = "sd-scripts-gui.training-config"
 ARTIFACT_EXTENSIONS = "safetensors|ckpt|pt"

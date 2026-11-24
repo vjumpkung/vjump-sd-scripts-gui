@@ -26,6 +26,7 @@ from enum import Enum
 from starlette.datastructures import Headers
 from starlette.requests import cookie_parser
 
+AUTH_SESSION_KEY = "sd_scripts_gui.auth_session_key"
 SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 MAX_SESSIONS = 100
 FREE_FAILURES = 5
@@ -49,6 +50,7 @@ class AuthResult:
     state: AuthState
     # Whole seconds until the next password check is allowed (THROTTLED only).
     retry_after: int = 0
+    session_key: str | None = None
 
 
 def _digest(value: bytes) -> bytes:
@@ -91,9 +93,12 @@ class AuthService:
         return token
 
     def session_valid(self, token: str) -> bool:
+        return self.session_key_valid(self._session_key(token))
+
+    def session_key_valid(self, key: str) -> bool:
         now = self.clock()
         self._prune(now)
-        return self._session_key(token) in self._sessions
+        return key in self._sessions
 
     def revoke(self, token: str) -> None:
         self._sessions.pop(self._session_key(token), None)
@@ -161,8 +166,10 @@ class AuthService:
         if not self.enabled:
             return AuthResult(AuthState.OK)
         tokens = self.session_tokens(headers)
-        if any(self.session_valid(token) for token in tokens):
-            return AuthResult(AuthState.OK)
+        for token in tokens:
+            key = self._session_key(token)
+            if self.session_key_valid(key):
+                return AuthResult(AuthState.OK, session_key=key)
         supplied = self._password_from_authorization(headers.get("authorization"))
         if supplied is None:
             presented = bool(tokens) or "authorization" in headers

@@ -70,7 +70,9 @@ async def logout(request: Request) -> Response:
     auth = _auth(request)
     for token in auth.session_tokens(request.headers):
         auth.revoke(token)
-    request.app.state.realtime.notify(AUTH)
+    realtime = request.app.state.realtime
+    await realtime.disconnect_invalid_sessions()
+    realtime.notify(AUTH)
     response = Response(status_code=204)
     for name in COOKIE_NAMES:
         # A __Host- cookie can only be (over)written with Secure and Path=/.

@@ -189,7 +189,9 @@ class QueueRunner:
                 log_file,
                 log_path.stat().st_size,
                 on_write=(
-                    None if realtime is None else lambda: realtime.notify_log(job_id)
+                    None
+                    if realtime is None
+                    else lambda offset, data: realtime.notify_log(job_id, offset, data)
                 ),
             )
             writer.write(
@@ -266,7 +268,8 @@ class QueueRunner:
             "UPDATE training_jobs SET progress_json = ? WHERE id = ?",
             (json.dumps(progress), job_id),
         )
-        self._changed(TRAINING)
+        if self.realtime is not None:
+            self.realtime.notify_job_progress(job_id, progress)
 
     async def _claim_job(self, job_id: str, log_path: Path) -> bool:
         """Atomically claim a queued job while respecting pause and cancellation."""
@@ -327,7 +330,9 @@ class QueueRunner:
 class _LogWriter:
     """Append-only log writer with a size cap."""
 
-    def __init__(self, handle, size: int, on_write: Callable[[], None] | None = None):
+    def __init__(
+        self, handle, size: int, on_write: Callable[[int, bytes], None] | None = None
+    ):
         self.handle = handle
         self.size = size
         self.on_write = on_write
@@ -342,9 +347,10 @@ class _LogWriter:
             data = LOG_TRUNCATED_NOTICE.encode() + b"\n"
         self.handle.write(data)
         self.handle.flush()
+        offset = self.size
         self.size += len(data)
         if self.on_write is not None:
-            self.on_write()
+            self.on_write(offset, data)
 
 
 async def renumber_queue(db: Database) -> None:

@@ -149,7 +149,7 @@ def create_app() -> FastAPI:
     # One instance shared by the auth middleware and the /api/auth routes.
     app.state.auth = AuthService(settings.password)
     # One hub: the services push invalidation hints through it.
-    app.state.realtime = RealtimeHub()
+    app.state.realtime = RealtimeHub(app.state.auth)
 
     # Middlewares added first are innermost. Order, outermost first: trusted hosts,
     # CORS (so preflights and 401s carry CORS headers), fetch-metadata check, auth,

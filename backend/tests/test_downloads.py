@@ -11,7 +11,7 @@ from app.download_catalog import DOWNLOAD_MODELS
 from app.schemas.downloads import DownloadFile, DownloadModel
 
 from .conftest import wait_for
-from .helpers import record_events, seen
+from .helpers import record_events, seen, wait_idle
 
 TOKEN = "hf_test_secret_token"
 EXPECTED_IDS = [
@@ -420,3 +420,48 @@ def test_a_failed_download_still_refreshes_the_catalog(client, bundle, monkeypat
     job_id = start(client, "one").json()["id"]
     assert finished(client, job_id)["status"] == "failed"
     wait_for(lambda: seen(events, "catalog"), timeout=10)
+
+
+def test_download_pushes_changed_rest_item_without_a_progress_invalidate(
+    client, monkeypatch
+):
+    chunk_size = 1024 * 1024
+    model = DownloadModel(
+        id="stream",
+        name="Stream",
+        family="flux",
+        files=[hf("stream.safetensors", chunk_size + 1)],
+    )
+    monkeypatch.setattr("app.services.downloads.DOWNLOAD_MODELS", {model.id: model})
+    send_chunk, finish = asyncio.Event(), asyncio.Event()
+
+    class GatedStream(httpx.AsyncByteStream):
+        async def __aiter__(self) -> AsyncIterator[bytes]:
+            await send_chunk.wait()
+            yield b"x" * chunk_size
+            await finish.wait()
+            yield b"x"
+
+    client.app.state.downloads.transport = httpx.MockTransport(
+        lambda _: httpx.Response(200, stream=GatedStream())
+    )
+    events = record_events(monkeypatch, client.app)
+    job_id = start(client, model.id).json()["id"]
+    wait_for(lambda: seen(events, "downloads"))
+    wait_idle(client.app)
+    start_index = len(events)
+
+    try:
+        client.portal.call(send_chunk.set)
+        wait_for(lambda: len(events) > start_index)
+        wait_idle(client.app)
+        rest_job = client.get(f"/api/downloads/{job_id}").json()
+        assert rest_job["status"] == "running"
+        assert rest_job["downloaded_bytes"] == chunk_size
+        assert events[start_index:] == [("download_progress", {"jobs": [rest_job]})]
+    finally:
+        client.portal.call(finish.set)
+
+    terminal = finished(client, job_id)
+    wait_for(lambda: seen(events, "catalog", start=start_index))
+    assert ("download_progress", {"jobs": [terminal]}) in events
